@@ -6,6 +6,7 @@ selection_rule: >-
 source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
 cases:
   - id: qedc_mc_004_003_000
+    stratum: public
     loader: maxcut_edgelist
     local_path: data/raw/qedc/mc_004_003_000.txt
     source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_004_003_000.txt
@@ -16,6 +17,7 @@ cases:
     dataset_key: qedcbench/maxcut/_common/instances/mc_004_003_000.txt
     complete_workload: true
   - id: qedc_mc_006_003_000
+    stratum: public
     loader: maxcut_edgelist
     local_path: data/raw/qedc/mc_006_003_000.txt
     source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_006_003_000.txt
@@ -26,6 +28,7 @@ cases:
     dataset_key: qedcbench/maxcut/_common/instances/mc_006_003_000.txt
     complete_workload: true
   - id: qedc_mc_008_003_000
+    stratum: public
     loader: maxcut_edgelist
     local_path: data/raw/qedc/mc_008_003_000.txt
     source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_008_003_000.txt
@@ -35,14 +38,13 @@ cases:
     source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
     dataset_key: qedcbench/maxcut/_common/instances/mc_008_003_000.txt
     complete_workload: true
-  - {id: diagnostic_path_8, loader: generated_graph, generator: path, parameters: {n: 8}, seed: 0, complete_workload: true}
-  - {id: diagnostic_cycle_8, loader: generated_graph, generator: cycle, parameters: {n: 8}, seed: 0, complete_workload: true}
-  - {id: diagnostic_star_8, loader: generated_graph, generator: star, parameters: {n: 8}, seed: 0, complete_workload: true}
-  - {id: diagnostic_triangle, loader: generated_graph, generator: triangle, parameters: {n: 3}, seed: 0, complete_workload: true}
-  - {id: diagnostic_clique_6, loader: generated_graph, generator: clique, parameters: {n: 6}, seed: 0, complete_workload: true}
-  - {id: diagnostic_biclique_3_4, loader: generated_graph, generator: biclique, parameters: {a: 3, b: 4}, seed: 0, complete_workload: true}
-  - {id: diagnostic_duplicates, loader: generated_masks, masks: [3, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
-  - {id: diagnostic_dependent, loader: generated_masks, masks: [1, 2, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
-  - {id: negative_weighted_path, loader: generated_graph, generator: weighted_path, parameters: {n: 6}, seed: 0, complete_workload: true}
-  - {id: negative_irregular_masks, loader: generated_masks, masks: [3, 12, 21, 42], qubit_count: 6, coefficients: [1, 2, 3, 5], seed: 0, complete_workload: false}
-
+  - {id: diagnostic_path_8, stratum: synthetic_diagnostic, loader: generated_graph, generator: path, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_cycle_8, stratum: synthetic_diagnostic, loader: generated_graph, generator: cycle, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_star_8, stratum: synthetic_diagnostic, loader: generated_graph, generator: star, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_triangle, stratum: synthetic_diagnostic, loader: generated_graph, generator: triangle, parameters: {n: 3}, seed: 0, complete_workload: true}
+  - {id: diagnostic_clique_6, stratum: synthetic_diagnostic, loader: generated_graph, generator: clique, parameters: {n: 6}, seed: 0, complete_workload: true}
+  - {id: diagnostic_biclique_3_4, stratum: synthetic_diagnostic, loader: generated_graph, generator: biclique, parameters: {a: 3, b: 4}, seed: 0, complete_workload: true}
+  - {id: diagnostic_duplicates, stratum: synthetic_diagnostic, loader: generated_masks, masks: [3, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
+  - {id: diagnostic_dependent, stratum: synthetic_diagnostic, loader: generated_masks, masks: [1, 2, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
+  - {id: negative_weighted_path, stratum: negative_control, loader: generated_graph, generator: weighted_path, parameters: {n: 6}, seed: 0, complete_workload: true}
+  - {id: negative_irregular_masks, stratum: negative_control, loader: generated_masks, masks: [3, 12, 21, 42], qubit_count: 6, coefficients: [1, 2, 3, 5], seed: 0, complete_workload: false}

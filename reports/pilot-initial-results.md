@@ -1,5 +1,9 @@
 # Experiment Summary
 
+> Historical prototype evidence from schema v1. Superseded by
+> `reports/m2-reliable-evaluation.md`; these rows are excluded from repaired
+> primary comparisons.
+
 Results: `results/raw/pilot-initial`
 
 This is prototype evidence, not a novelty or performance claim. Emitted and macro-estimated counts are separated.

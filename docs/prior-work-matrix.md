@@ -4,6 +4,13 @@ Checked against current arXiv metadata and linked repositories on 2026-09-07.
 An unsuccessful code search is recorded as unverified availability, not as
 evidence that no implementation exists.
 
+Remediation update, 2026-09-08: the candidate identity is exactly the
+dependency-simplified Hamming-weight representation of a three-predicate
+batch. The implemented ablation emits the same circuit for both descriptions.
+This resolves the current mechanism as subsumed; the literature matrix is not
+used to recover a novelty claim. The emitted ANF HWP remains a correctness
+reference and not a reproduction of the strongest cited HWP circuit.
+
 | Source and checked version | Exact location used | Gate/metric model and applicable input | Implementation status | Overlap with this prototype |
 | --- | --- | --- | --- | --- |
 | Ross-Selinger, *Optimal ancilla-free Clifford+T approximation of z-rotations*, arXiv:1403.2975v3 (2016) | synthesis algorithm and typical T-count discussion | ancilla-free Clifford+T approximation of one `Rz` | `pygridsynth==2.0.0` verified on PyPI/GitHub as an implementation based on gridsynth | supplies B0/B1/candidate rotation synthesis; no collective predicate optimization |
@@ -28,4 +35,3 @@ evidence that no implementation exists.
 | HamLib | public NERSC portal reachable; archive subset/license audit incomplete | spin-model pilot remains pending |
 | simcount | Git HEAD reachable at `1e40e551965cf6009c87016219621fd9bf18f6fc`; compatibility not audited | unavailable baseline/sample source |
 | Rustiq | Git HEAD reachable at `425000222e21a7a28d70a08c75be968f16fd6903`; compatibility not audited | possible future parity-network component, not a T synthesizer |
-

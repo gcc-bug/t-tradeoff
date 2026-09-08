@@ -1,5 +1,8 @@
 # Experiment Summary
 
+> Historical prototype evidence from schema v1. These rows are excluded from
+> repaired primary comparisons.
+
 Results: `results/raw/smoke`
 
 This is prototype evidence, not a novelty or performance claim. Emitted and macro-estimated counts are separated.

@@ -15,7 +15,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
-    if not isinstance(config, dict) or config.get("schema_version") != 1:
+    if not isinstance(config, dict) or config.get("schema_version") not in {1, 2}:
         raise ValueError(f"unsupported config schema in {config_path}")
     config["_path"] = str(config_path.resolve())
     return config
@@ -132,10 +132,12 @@ def _source_metadata(case: dict[str, Any], source_hash: str) -> dict[str, Any]:
         "license_url",
         "seed",
         "complete_workload",
+        "stratum",
     )
     result = {key: case[key] for key in keys if key in case}
     result["source_hash"] = source_hash
     result["loader"] = case["loader"]
+    result.setdefault("stratum", "unclassified")
     return result
 
 
@@ -187,4 +189,3 @@ def load_cases(
     manifest: dict[str, Any], angle: AngleBinding, root: Path
 ) -> list[PhaseProgram]:
     return [load_case(case, angle, root) for case in manifest["cases"]]
-

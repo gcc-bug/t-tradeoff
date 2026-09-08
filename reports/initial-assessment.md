@@ -1,5 +1,9 @@
 # Initial Research Assessment
 
+> Historical assessment based on schema-v1 macros and basic references.
+> Superseded by `reports/m2-reliable-evaluation.md` and the structural decision
+> that dependency-simplified HWP emits the same circuit as the raw rule.
+
 Date: 2026-09-07
 
 Configuration: `configs/pilot-initial.yaml`.  This bounded decision run uses all

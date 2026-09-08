@@ -11,24 +11,24 @@ Temporary logical AND computation is charged 4 T and its measurement-assisted
 uncompute is charged zero T plus one measurement/adaptive dependency.  Unknown
 macro Clifford counts are reported as `null`, not zero.
 
-Ordinary HWP uses the published count `M - popcount(M)` half/full adders for an
-`M`-predicate batch.  Measurement-assisted cleanup is charged separately.
-The unitary profile conservatively lowers both compute and inverse at 7 T per
-adder.  HWP circuit internals are not yet emitted, so both profiles remain
-`estimated_macro`.
+`hwp_emitted` uses an out-of-place ANF population-count reference. Its
+multi-controlled operations and Toffolis are explicitly emitted, so counts and
+depth come from the gate stream. `hwp_macro_legacy` retains the older formula
+interpretation under an explicit, unranked label. The emitted circuit does not
+reproduce the cited in-place or measurement-assisted construction.
 
-Catalyzed HWP adds the Kan-Symons generalized phase-gradient Toffoli count,
+Catalyzed HWP estimates add the Kan-Symons generalized phase-gradient Toffoli count,
 one residual synthesized rotation per nontrivial batch, catalyst registers,
-and all catalyst preparation rotations.  Generalized phase-gradient Toffolis
-are conservatively charged at 7 T each.  Reuse count is never inferred from
-shots or parameter updates.
+and all catalyst preparation rotations. These channels and formulas have not
+been independently emitted and remain excluded from primary rankings. Reuse
+count is never inferred from shots or parameter updates.
 
 ## Scheduler
 
 Each Clifford operation propagates the maximum dependency level of all touched
 qubits without increasing it.  Each `T` or `T-dagger` operation increments the
-level.  Macro depth increments are documented upper-bound estimates and are
-visibly labeled.  Measurement-to-correction rounds remain causal.
+level. Macro depth values are historical estimates and are not ranked.
+Measurement-to-correction rounds remain causal.
 
 ## Error allocation
 
@@ -42,4 +42,3 @@ application synthesis remain separate in circuit artifacts.
 
 The model does not include Trotter error, input coefficient rounding, physical
 runtime, factory throughput, routing, or code distance.
-

@@ -32,27 +32,19 @@ generic `Rz` rotations.  Exact multiples of `pi/4` bypass approximate
 synthesis.  The compiler records the global phase introduced by translating
 `P(theta) = diag(1, exp(i theta))` to `Rz(theta)`.
 
-## Reproduction
+## Repaired reproduction
 
-The smoke suite is fully synthetic and requires no downloads:
-
-```bash
-python -m collective_phase audit --config configs/smoke.yaml
-python -m collective_phase profile --config configs/smoke.yaml
-python -m collective_phase run --config configs/smoke.yaml
-python -m collective_phase verify --results results/raw/smoke
-python -m collective_phase report --results results/raw/smoke
-```
-
-The frozen pilot currently contains three QED-C MaxCut instances selected by
-fixed filename order, plus diagnostic and negative-control cases:
+The repaired development pilot contains three checksum-pinned QED-C MaxCut
+instances plus separately labeled diagnostics and negative controls:
 
 ```bash
-python -m collective_phase acquire --config configs/pilot.yaml
-python -m collective_phase profile --config configs/pilot.yaml
-python -m collective_phase run --config configs/pilot.yaml
-python -m collective_phase verify --results results/raw/pilot
-python -m collective_phase report --results results/raw/pilot
+python -m collective_phase audit --config configs/repair-pilot.yaml
+python -m collective_phase acquire --config configs/repair-pilot.yaml
+python -m collective_phase profile --config configs/repair-pilot.yaml
+python -m collective_phase run --config configs/repair-pilot.yaml
+python -m collective_phase verify --results results/raw/repair-pilot
+python -m collective_phase report --results results/raw/repair-pilot \
+  --output reports/m2-reliable-evaluation.md
 ```
 
 Raw input downloads and generated result rows are ignored.  Their manifests,
@@ -60,11 +52,17 @@ checksums, configuration hashes, and exact acquisition URLs are tracked.
 
 ## Interpretation
 
-`independent`, `shared_parity`, and unitary `dependent_triples` results use
-emitted Clifford+T operations.  `hwp` and `catalyzed_hwp` currently use
-validated semantic macros with published compositional gate formulas, and are
-marked `estimated_macro`.  `joint_synthesis` is reported as unavailable; no
-NCF reproduction is claimed.
+The repaired runner uses explicit method identities. Emitted methods include
+`independent`, `shared_parity`, `hwp_emitted`,
+`hwp_emitted_triple_grouped`, `hwp_dependency_simplified`,
+`dependent_triples_raw`, and `dependent_triples_selected`.
+`hwp_macro_legacy` is shown only as historical formula evidence.
+
+The current triple rewrite is exactly reproduced by dependency-simplified HWP
+on every repaired pilot case. It is therefore retained as a regression case,
+not reported as a surviving new method. Joint synthesis, catalytic HWP, and
+measurement-assisted HWP remain unavailable or unverified under matching
+semantics.
 
 See [docs/semantics.md](docs/semantics.md),
 [docs/resource-model.md](docs/resource-model.md), and

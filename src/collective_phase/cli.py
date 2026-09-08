@@ -9,6 +9,7 @@ from .experiments import (
     acquire,
     audit_configuration,
     profile_cases,
+    required_run_failures,
     run_experiments,
     verify_result_rows,
     write_report,
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "audit":
         result = audit_configuration(config)
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0 if not result["unknown_methods"] else 2
+        return 0 if result["basic_run_ready"] else 2
     if args.command == "acquire":
         print(json.dumps(acquire(config), indent=2, sort_keys=True))
         return 0
@@ -62,13 +63,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "run":
         rows = run_experiments(config, force=args.force)
-        print(json.dumps({"rows": len(rows), "results": config["results_dir"]}, indent=2))
-        return 0
+        failures = required_run_failures(rows, config)
+        print(
+            json.dumps(
+                {
+                    "rows": len(rows),
+                    "results": config["results_dir"],
+                    "required_gate_failures": failures,
+                },
+                indent=2,
+            )
+        )
+        return 0 if not failures else 2
     if args.command == "verify":
         result = verify_result_rows(Path(args.results).resolve(), Path.cwd().resolve())
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == "verified" else 2
     if args.command == "report":
+        verification = verify_result_rows(
+            Path(args.results).resolve(), Path.cwd().resolve()
+        )
+        if verification["status"] != "verified":
+            print(json.dumps(verification, indent=2, sort_keys=True))
+            return 2
         destination = write_report(args.results, args.output)
         print(destination)
         return 0
@@ -77,4 +94,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

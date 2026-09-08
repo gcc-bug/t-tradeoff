@@ -1,126 +1,94 @@
 # Methodology Overview
 
-## Current algorithm and tradeoff
+## Current algorithm and its tradeoff
 
-The target is a block of equal-angle parity phases
+The compiler targets diagonal parity phases:
 
-```text
-U(theta)|x> = exp(i theta sum_j p_j(x)) |x>,
-p_j(x) = parity(a_j & x).
-```
+    U|x> = exp(i sum_j theta_j c_j p_j(x)) |x>
+    p_j(x) = parity(a_j & x) XOR b_j
 
-The basic implementation treats every predicate independently: compute one
-parity with CNOTs, apply `P(theta)`, and uncompute the parity.  Therefore, three
-predicates normally require three synthesized rotations.
+All methods first use the same block-local preprocessing. Constants become a
+global phase, affine complements are normalized, exact duplicates are merged,
+cancellations are removed, and terms are grouped only when block, angle ID,
+and integer coefficient match.
 
-The current candidate looks for a dependent triple of masks
+The raw candidate looks for a compatible mask triple A, B, and A XOR B. If
+their Boolean values are a, b, and a XOR b, then:
 
-```text
-A, B, C, where C = A XOR B.
-```
+    a + b + (a XOR b) = 2(a OR b)
 
-For their Boolean values `a`, `b`, and `a XOR b`, it uses the exact identity
+It computes a and b into two clean qubits, computes a OR b into a third,
+applies one phase with angle 2 theta c, and uncomputes everything. The
+tradeoff is two fewer arbitrary rotations in exchange for two Toffolis,
+additional Clifford gates, and three clean work qubits. The raw compiler keeps
+the rewrite even when this loses. The selected compiler lowers the raw,
+independent, and shared-parity alternatives under the same total error budget
+and chooses by the declared objective with a deterministic tie-break.
 
-```text
-a + b + (a XOR b) = 2(a OR b).
-```
+Ordinary Hamming-weight phasing is evaluated in three explicit forms:
 
-The compiler consequently replaces three `P(theta)` rotations with one
-`P(2 theta)` rotation:
+- hwp_emitted computes binary weight with an emitted, out-of-place ANF
+  reference circuit and searches legal batch caps using full lowering.
+- hwp_emitted_triple_grouped applies that generic arithmetic to exactly the
+  raw candidate's triple groups, isolating the grouping effect.
+- hwp_dependency_simplified simplifies the same triple's weight bits. Its
+  low bit is constant zero and its high bit is a OR b.
 
-1. Compute parities `a` and `b` into two clean work qubits.
-2. Compute `a OR b` into a third clean work qubit.
-3. Apply `P(2 theta)` to the OR result.
-4. Reverse the computation and return all work qubits to zero.
-
-The unitary implementation trades two arbitrary rotations for two Toffolis,
-three clean work qubits, and additional Clifford gates.  Each Toffoli is
-currently emitted with a 7-T decomposition.  This can reduce T-count when
-generic rotation synthesis is more expensive than the added 14 T gates.
-
-The tradeoff is not always favorable:
-
-- Special Clifford+T angles can make the original rotations cheap.
-- A block without an eligible equal-angle, unit-coefficient triple is left
-  unchanged.
-- Overlapping triples are selected by a deterministic disjoint greedy rule;
-  the current implementation does not claim globally optimal selection.
-- Added computation can increase scheduled T-depth even when T-count falls.
-- The transformation requires three extra logical qubits when used.
-
-Ordinary Hamming-weight phasing provides the main comparison.  It trades a
-large batch of rotations for weight-computation arithmetic and fewer rotations.
-With limited workspace, the current evaluation divides terms into balanced
-batches.  Catalyzed HWP further trades rotation synthesis for catalyst
-preparation, storage, and arithmetic.  These HWP methods currently use verified
-ideal semantics and published resource formulas, but their arithmetic circuits
-are not yet fully emitted.
+The last form emits the same circuit as the raw triple rewrite. The repaired
+pilot confirms identical operation streams on all 13 cases. Therefore the
+current rule is an HWP specialization, not a surviving new mechanism. It is
+retained as a regression and teaching case.
 
 ## Evaluation pipeline
 
-```text
-frozen manifest -> acquisition -> canonical IR -> structure profile
-                -> compile methods -> semantic verification
-                -> Clifford+T lowering -> resource scheduling
-                -> result validation -> comparison report
-```
+    frozen manifest
+      -> checksum-checked acquisition or deterministic generation
+      -> canonical parity-phase IR
+      -> shared preprocessing and structural profile
+      -> explicit compiler variants
+      -> ideal semantic verification
+      -> common Clifford+T lowering and rotation synthesis
+      -> independent emitted-gate verification
+      -> dependency scheduling and resource accounting
+      -> artifact replay and matched, stratified reporting
 
-1. **Freeze inputs.** Each case records its source, selection rule, revision,
-   checksum, generator parameters, and seed before candidate evaluation.
-2. **Acquire data.** Public files are downloaded without overwriting existing
-   data and accepted only when their SHA-256 checksums match the manifest.
-3. **Build the canonical IR.** The loader preserves term IDs, parity masks,
-   multiplicities, exact angle-class IDs, coefficients, block boundaries, and
-   qubit order.
-4. **Profile structure.** The profiler measures term count, unique parities,
-   duplicate multiplicities, binary rank, dependency witnesses, dependent
-   triples, support sizes, and graph properties such as degree and triangles.
-5. **Compile comparable methods.** Every method receives the same program,
-   total synthesis-error budget, workspace budget, and gate-model profile.
-6. **Verify semantics.** For small cases, every basis input is checked for the
-   correct phase, unchanged data, and zero returned workspace.  A separate
-   coherent-state check is used when the total state vector is small enough.
-7. **Lower and count resources.** Generic rotations are synthesized with
-   `pygridsynth==2.0.0`; special angles are exact.  Each synthesized matrix is
-   checked in operator norm.  A common dependency scheduler reports T-count,
-   T-depth, workspace, total qubits, Clifford count when known, measurements,
-   and adaptive rounds.
-8. **Store and validate results.** One JSON row is written per case and method
-   setting.  Missing, infeasible, unavailable, and failed results remain
-   explicit.  Circuit hashes and error bounds are rechecked before reporting.
+Each method receives the same target, exact angle binding, total operator-norm
+synthesis budget, workspace limit, gate model, reuse count, and objective.
+Generic rotations use pygridsynth 2.0.0; exact multiples of pi/4 use exact
+Clifford+T gates.
 
-## Benchmarks
+For small emitted circuits, the independent verifier constructs the complete
+clean-input isometry and compares it with the target using spectral norm. It
+uses its own one- and two-qubit matrices rather than the ideal-operation
+interpreter. A memory preflight prevents accidental exponential allocation.
+Larger circuits receive explicitly labeled compositional evidence: validated
+primitive streams, replayed lowering, exact transformation certificates, and
+the sum of independently recomputed rotation errors. Macro events never count
+as emitted verification.
 
-The smoke suite contains three deterministic synthetic cases: a triangle, a
-four-vertex path, and the smallest dependent-parity witness `{1, 2, 3}`.  It is
-used for fast semantic and CLI checks.
+Every successful schema-v2 row stores the program, candidate, rotations,
+lowered events, global phase, verification evidence, resource record, and all
+selection alternatives. Verification reconstructs these objects and recomputes
+the target identity, ideal semantics, lowering, synthesis bound, gate-level
+evidence, and resources. Hashes detect accidental changes; replay detects
+semantically invalid changes even if a hash is updated.
 
-The frozen pilot manifest contains 13 cases:
+## Benchmarks and reporting
 
-- Three checksum-pinned public unweighted MaxCut graphs from QED-C, with 4, 6,
-  and 8 vertices.
-- Eight synthetic diagnostics covering paths, cycles, stars, triangles,
-  cliques, bicliques, duplicate parities, and dependent parity sets.
-- Two negative controls with unequal weights or irregular independent masks.
+The repaired development pilot keeps the previously frozen 13 cases and
+setting: one generic angle (0.173), total operator-norm budget 1e-4, eight
+work qubits, and the unitary Clifford+T model.
 
-The initial decision run uses every pilot case with `theta=0.173`, total
-operator-norm synthesis error `1e-4`, eight extra logical qubits, and the
-unitary Clifford+T profile.  The full planned grid additionally contains three
-angles, two error budgets, workspace budgets `{0, 8, 32}`, and separate unitary
-and measurement-assisted profiles.
+| Stratum | Cases | Role |
+| --- | ---: | --- |
+| Public | 3 checksum-pinned QED-C MaxCut instances | Limited public development evidence |
+| Synthetic diagnostic | 8 predeclared graph and parity cases | Mechanism and failure-regime diagnosis |
+| Negative control | 2 weighted or irregular cases | Confirm no manufactured applicability |
 
-## Methods compared
-
-| Method | Description | Current evidence level |
-| --- | --- | --- |
-| `independent` | Compute, phase, and uncompute each unique parity | Fully emitted |
-| `shared_parity` | Reuse CNOT parity-network state through a greedy parity walk | Fully emitted |
-| `hwp` | Compute parity inputs, phase their Hamming weight, and clean up | Ideal semantics plus resource macros |
-| `catalyzed_hwp` | HWP with reusable phase-gradient catalysts | Ideal semantics plus resource macros |
-| `dependent_triples` | Replace eligible triples by the OR construction above | Fully emitted in the unitary profile |
-| `joint_synthesis` | Intended NCF-compatible comparison | Unavailable; not ranked |
-
-The initial report compares emitted methods separately from macro-estimated
-methods.  Its results are evidence for continuing the investigation, not a
-claim of novelty or final superiority.
-
+Reports show absolute T-count, scheduled logical T-depth, peak workspace,
+error bound, selected construction, and verification scope per instance.
+Wins, ties, and regressions use matched populations for each named baseline and
+for the best eligible strong baseline. Legacy macro estimates are displayed
+separately and cannot enter primary rankings. The emitted HWP implementation is
+a correctness reference, not yet a competitive reproduction of published
+in-place or measurement-assisted HWP.

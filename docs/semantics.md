@@ -24,9 +24,18 @@ a diagonal phase, this exhaustive check establishes action on arbitrary
 superpositions.  A separate state-vector test propagates a random coherent
 state for small total register sizes.
 
-The ideal HWP macros are reversible XOR embeddings of the binary Hamming
+After lowering, a separate verifier implements only the emitted one- and
+two-qubit matrices and does not reuse the ideal operation interpreter. For
+small circuits it builds the clean-input isometry and compares it with the
+target isometry in spectral norm, including workspace leakage and global
+phase. A memory estimate is checked before allocation. Larger circuits receive
+explicit compositional scope based on deterministic gate replay, validated
+primitive decompositions, exact transformation certificates, and summed local
+synthesis error.
+
+Legacy HWP macros are reversible XOR embeddings of the binary Hamming
 weight, followed by exact bit-weighted phases and inverse cleanup.  This proves
 the compiler transformation, not the published macro's gate decomposition.
-Resource results therefore retain `estimated_macro` until those circuits are
-emitted and independently channel-checked.  Their verification status is
-`verified_ideal_macro`, distinct from `verified_exact` on emitted circuits.
+Their verification status remains ideal-macro-only. The new `hwp_emitted`
+reference instead emits unitary ANF population-count arithmetic and must pass
+the independent lowered verifier before ranking.
