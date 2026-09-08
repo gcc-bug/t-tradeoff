@@ -1,0 +1,22 @@
+schema_version: 1
+run_id: smoke
+manifest: data/manifests/smoke.yaml
+angles:
+  - id: theta_pi_4
+    value: pi/4
+total_error_budgets: [1.0e-4]
+workspace_budgets: [0, 8]
+model_profiles: [unitary_clifford_t]
+methods:
+  - independent
+  - shared_parity
+  - hwp
+  - catalyzed_hwp
+  - dependent_triples
+  - joint_synthesis
+hwp_batch_policy: balanced
+catalyst_reuse_counts: [1, 10]
+seed: 0
+results_dir: results/raw/smoke
+diagnosis_path: reports/diagnosis-smoke.md
+

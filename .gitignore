@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.coverage
+build/
+dist/
+*.egg-info/
+data/raw/
+results/raw/
+results/generated/
+.codex/skills/
+ara/
+

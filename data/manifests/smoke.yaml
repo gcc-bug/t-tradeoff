@@ -1,0 +1,23 @@
+schema_version: 1
+selection_rule: >-
+  Small deterministic semantic witnesses selected before candidate evaluation.
+cases:
+  - id: synthetic_triangle
+    loader: generated_graph
+    generator: triangle
+    parameters: {n: 3}
+    seed: 0
+    complete_workload: true
+  - id: synthetic_path_4
+    loader: generated_graph
+    generator: path
+    parameters: {n: 4}
+    seed: 0
+    complete_workload: true
+  - id: synthetic_dependent_triple
+    loader: generated_masks
+    masks: [1, 2, 3]
+    qubit_count: 2
+    seed: 0
+    complete_workload: false
+

@@ -1,0 +1,48 @@
+schema_version: 1
+selection_rule: >-
+  First three 3-regular QED-C MaxCut files in increasing vertex-count order,
+  followed by predeclared deterministic diagnostics. Selection is independent
+  of candidate performance.
+source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
+cases:
+  - id: qedc_mc_004_003_000
+    loader: maxcut_edgelist
+    local_path: data/raw/qedc/mc_004_003_000.txt
+    source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_004_003_000.txt
+    sha256: 28b8c06d893be9a6f5cff7524efde38749861cce15fa281b8a346a091ae9d658
+    license: Apache-2.0
+    license_url: https://github.com/sri-international/qc-app-oriented-benchmarks/blob/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/LICENSE
+    source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
+    dataset_key: qedcbench/maxcut/_common/instances/mc_004_003_000.txt
+    complete_workload: true
+  - id: qedc_mc_006_003_000
+    loader: maxcut_edgelist
+    local_path: data/raw/qedc/mc_006_003_000.txt
+    source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_006_003_000.txt
+    sha256: 86255510d024b5d5c25e5bfe6f291dac15a1ad5586dbee3495a396c08f6216e6
+    license: Apache-2.0
+    license_url: https://github.com/sri-international/qc-app-oriented-benchmarks/blob/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/LICENSE
+    source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
+    dataset_key: qedcbench/maxcut/_common/instances/mc_006_003_000.txt
+    complete_workload: true
+  - id: qedc_mc_008_003_000
+    loader: maxcut_edgelist
+    local_path: data/raw/qedc/mc_008_003_000.txt
+    source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_008_003_000.txt
+    sha256: 8b60356fee9e7e4b9ba318ff130e9aa4f62b90eb0a5bf0269472667f6ae8daed
+    license: Apache-2.0
+    license_url: https://github.com/sri-international/qc-app-oriented-benchmarks/blob/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/LICENSE
+    source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
+    dataset_key: qedcbench/maxcut/_common/instances/mc_008_003_000.txt
+    complete_workload: true
+  - {id: diagnostic_path_8, loader: generated_graph, generator: path, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_cycle_8, loader: generated_graph, generator: cycle, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_star_8, loader: generated_graph, generator: star, parameters: {n: 8}, seed: 0, complete_workload: true}
+  - {id: diagnostic_triangle, loader: generated_graph, generator: triangle, parameters: {n: 3}, seed: 0, complete_workload: true}
+  - {id: diagnostic_clique_6, loader: generated_graph, generator: clique, parameters: {n: 6}, seed: 0, complete_workload: true}
+  - {id: diagnostic_biclique_3_4, loader: generated_graph, generator: biclique, parameters: {a: 3, b: 4}, seed: 0, complete_workload: true}
+  - {id: diagnostic_duplicates, loader: generated_masks, masks: [3, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
+  - {id: diagnostic_dependent, loader: generated_masks, masks: [1, 2, 3, 5, 6], qubit_count: 3, seed: 0, complete_workload: false}
+  - {id: negative_weighted_path, loader: generated_graph, generator: weighted_path, parameters: {n: 6}, seed: 0, complete_workload: true}
+  - {id: negative_irregular_masks, loader: generated_masks, masks: [3, 12, 21, 42], qubit_count: 6, coefficients: [1, 2, 3, 5], seed: 0, complete_workload: false}
+
