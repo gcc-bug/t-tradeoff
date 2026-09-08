@@ -14,7 +14,7 @@ from ..circuit import Candidate, Operation
 class VerificationResult:
     status: str
     checked_basis_states: int
-    max_phase_error: float
+    max_phase_error: float | None
     data_restored: bool
     workspace_restored: bool
     diagonal_permutation_structure: bool
@@ -76,7 +76,7 @@ def verify_candidate(candidate: Candidate, max_qubits: int = 10) -> Verification
         return VerificationResult(
             status="not_run",
             checked_basis_states=0,
-            max_phase_error=math.inf,
+            max_phase_error=None,
             data_restored=False,
             workspace_restored=False,
             diagonal_permutation_structure=False,
@@ -88,7 +88,7 @@ def verify_candidate(candidate: Candidate, max_qubits: int = 10) -> Verification
         return VerificationResult(
             status="certificate_only",
             checked_basis_states=0,
-            max_phase_error=math.nan,
+            max_phase_error=None,
             data_restored=False,
             workspace_restored=False,
             diagonal_permutation_structure=True,
@@ -105,9 +105,9 @@ def verify_candidate(candidate: Candidate, max_qubits: int = 10) -> Verification
         max_error = max(max_error, _phase_distance(phase, candidate.program.phase_radians(x)))
     success = data_restored and workspace_restored and max_error <= 1e-10
     success_status = (
-        "verified_exact"
+        "verified_ideal_semantics"
         if candidate.accounting_status == "emitted"
-        else "verified_ideal_macro"
+        else "verified_ideal_macro_semantics"
     )
     return VerificationResult(
         status=success_status if success else "verification_failure",
@@ -118,7 +118,7 @@ def verify_candidate(candidate: Candidate, max_qubits: int = 10) -> Verification
         diagonal_permutation_structure=True,
         dense_check="not_run",
         message=(
-            "exact emitted basis action verified"
+            "ideal operation-level basis action verified"
             if success and candidate.accounting_status == "emitted"
             else "ideal macro basis action verified"
             if success

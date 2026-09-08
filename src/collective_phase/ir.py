@@ -104,6 +104,10 @@ class AngleBinding:
     def to_dict(self) -> dict[str, str]:
         return {"id": self.id, "value": self.expression}
 
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "AngleBinding":
+        return cls(id=value["id"], expression=str(value["value"]))
+
 
 @dataclass(frozen=True)
 class ParityTerm:
@@ -127,6 +131,17 @@ class ParityTerm:
             "metadata": self.metadata,
         }
 
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "ParityTerm":
+        return cls(
+            id=value["id"],
+            mask=int(value["mask"]),
+            angle_id=value["angle_id"],
+            offset=bool(value.get("offset", False)),
+            coefficient=int(value.get("coefficient", 1)),
+            metadata=dict(value.get("metadata", {})),
+        )
+
 
 @dataclass(frozen=True)
 class PhaseBlock:
@@ -142,6 +157,15 @@ class PhaseBlock:
             "terms": [term.to_dict() for term in self.terms],
             "metadata": self.metadata,
         }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "PhaseBlock":
+        return cls(
+            id=value["id"],
+            terms=tuple(ParityTerm.from_dict(term) for term in value["terms"]),
+            boundary=value.get("boundary", "diagonal"),
+            metadata=dict(value.get("metadata", {})),
+        )
 
 
 @dataclass(frozen=True)
@@ -227,6 +251,19 @@ class PhaseProgram:
             "metadata": self.metadata,
         }
 
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "PhaseProgram":
+        return cls(
+            id=value["id"],
+            qubit_count=int(value["qubit_count"]),
+            angles=tuple(AngleBinding.from_dict(angle) for angle in value["angles"]),
+            blocks=tuple(PhaseBlock.from_dict(block) for block in value["blocks"]),
+            qubit_order=value.get(
+                "qubit_order", "little_endian_mask_bit_i_is_qubit_i"
+            ),
+            metadata=dict(value.get("metadata", {})),
+        )
+
 
 def make_program(
     case_id: str,
@@ -257,4 +294,3 @@ def make_program(
         blocks=(PhaseBlock(id=f"{case_id}:block:0", terms=terms),),
         metadata=metadata or {},
     )
-

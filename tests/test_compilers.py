@@ -3,6 +3,7 @@ import pytest
 from collective_phase.baselines import (
     compile_catalyzed_hwp,
     compile_hwp,
+    compile_hwp_emitted,
     compile_independent,
     compile_shared_parity,
 )
@@ -25,6 +26,7 @@ UNITARY = CompilationConstraints(32, "unitary_clifford_t")
         compile_independent,
         compile_shared_parity,
         compile_hwp,
+        compile_hwp_emitted,
         compile_catalyzed_hwp,
         compile_dependent_triples,
     ],
@@ -35,9 +37,9 @@ def test_compilers_restore_workspace_and_phase(masks, compiler):
     candidate = compiler(program, UNITARY)
     result = verify_candidate(candidate)
     expected = (
-        "verified_exact"
+        "verified_ideal_semantics"
         if candidate.accounting_status == "emitted"
-        else "verified_ideal_macro"
+        else "verified_ideal_macro_semantics"
     )
     assert result.status == expected
     if qubits + candidate.workspace_qubits <= 10:
@@ -51,30 +53,39 @@ def test_hwp_non_power_of_two_and_bounded_balanced_batches():
     )
     assert candidate.status == "success"
     assert candidate.workspace_qubits <= 5
-    assert verify_candidate(candidate).status == "verified_ideal_macro"
+    assert verify_candidate(candidate).status == "verified_ideal_macro_semantics"
     sizes = [
         value["size"]
         for value in candidate.transformation_trace
-        if value["action"] == "ordinary_hwp_batch"
+        if value["action"] == "legacy_hwp_macro_batch"
     ]
     assert sizes == [3, 2]
 
 
-def test_hwp_marks_zero_workspace_infeasible():
+def test_hwp_uses_direct_fallback_at_zero_workspace():
     program = make_program("one", 1, [1], AngleBinding("theta", "0.2"))
     candidate = compile_hwp(
         program, CompilationConstraints(0, "measurement_assisted_clifford_t")
     )
-    assert candidate.status == "infeasible"
-    assert verify_candidate(candidate).status == "not_run"
+    assert candidate.status == "success"
+    assert candidate.workspace_qubits == 0
+    assert candidate.accounting_status == "emitted"
+    assert verify_candidate(candidate).status == "verified_ideal_semantics"
 
 
-def test_weighted_control_rejects_equal_angle_hwp_but_direct_methods_work():
+def test_weighted_hwp_partitions_compatible_coefficients():
     program = make_program(
         "weighted", 2, [1, 2], AngleBinding("theta", "0.2"), coefficients=[1, 2]
     )
-    assert compile_hwp(program, UNITARY).status == "infeasible"
-    assert verify_candidate(compile_independent(program, UNITARY)).status == "verified_exact"
+    candidate = compile_hwp_emitted(program, UNITARY)
+    assert candidate.status == "success"
+    assert candidate.workspace_qubits == 0
+    assert sum(operation.kind == "phase" for operation in candidate.operations) == 2
+    assert verify_candidate(candidate).status == "verified_ideal_semantics"
+    assert (
+        verify_candidate(compile_independent(program, UNITARY)).status
+        == "verified_ideal_semantics"
+    )
 
 
 def test_affine_sign_and_constant_phase_compile_exactly():
@@ -94,7 +105,10 @@ def test_affine_sign_and_constant_phase_compile_exactly():
         ),
     )
     for compiler in (compile_independent, compile_shared_parity, compile_dependent_triples):
-        assert verify_candidate(compiler(program, UNITARY)).status == "verified_exact"
+        assert (
+            verify_candidate(compiler(program, UNITARY)).status
+            == "verified_ideal_semantics"
+        )
 
 
 def test_dependent_triple_detector_has_explicit_failure_regime():

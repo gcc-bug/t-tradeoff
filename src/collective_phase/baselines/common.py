@@ -6,6 +6,7 @@ from typing import Iterable
 
 from ..circuit import Operation, data_support
 from ..ir import PhaseProgram
+from ..preprocessing import NormalizedTerm
 
 
 SUPPORTED_MODELS = {
@@ -20,6 +21,8 @@ class CompilationConstraints:
     model_profile: str
     batch_policy: str = "balanced"
     catalyst_reuse_count: int = 1
+    objective: str = "t_count"
+    hwp_search_cap: int = 8
 
     def __post_init__(self) -> None:
         if self.workspace_budget is not None and self.workspace_budget < 0:
@@ -30,6 +33,10 @@ class CompilationConstraints:
             raise ValueError(f"unsupported batch policy {self.batch_policy!r}")
         if self.catalyst_reuse_count < 1:
             raise ValueError("catalyst reuse count must be positive")
+        if self.objective not in {"t_count", "t_depth", "pareto"}:
+            raise ValueError(f"unsupported objective {self.objective!r}")
+        if self.hwp_search_cap < 1:
+            raise ValueError("hwp search cap must be positive")
 
 
 def append_parity_phase(
@@ -50,6 +57,14 @@ def append_parity_into(
 ) -> None:
     operations.extend(
         Operation("cx", (control, target)) for control in data_support(mask)
+    )
+
+
+def append_direct_term(
+    operations: list[Operation], term: NormalizedTerm
+) -> None:
+    append_parity_phase(
+        operations, term.mask, term.angle_id, term.coefficient
     )
 
 

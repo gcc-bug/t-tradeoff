@@ -4,6 +4,7 @@ import math
 
 from ..circuit import Candidate, Operation
 from ..ir import PhaseProgram
+from ..preprocessing import PREPROCESSING_VERSION, preprocess
 from .common import (
     CompilationConstraints,
     append_parity_into,
@@ -11,30 +12,25 @@ from .common import (
     catalyst_workspace,
     chunks,
     max_batch_size,
-    validate_equal_unit_terms,
 )
 
 
 def compile_catalyzed_hwp(
     program: PhaseProgram, constraints: CompilationConstraints
 ) -> Candidate:
-    reason = validate_equal_unit_terms(program)
-    if reason:
-        return Candidate.infeasible(
-            "catalyzed_hwp", program, reason, model_profile=constraints.model_profile
-        )
+    normalized = preprocess(program)
     operations: list[Operation] = []
-    trace: list[dict] = []
-    resource_states: dict[tuple[str, int], dict] = {}
+    trace: list[dict] = list(normalized.trace)
+    resource_states: dict[tuple[str, int, int], dict] = {}
     peak = 0
-    for block in program.blocks:
-        terms = [term for term in block.terms if term.mask]
+    for group in normalized.groups:
+        terms = list(group.terms)
         capacity = max_batch_size(
             len(terms), constraints.workspace_budget, catalyst_workspace
         )
         if terms and capacity == 0:
             return Candidate.infeasible(
-                "catalyzed_hwp",
+                "catalyzed_hwp_unverified",
                 program,
                 "workspace budget cannot materialize one parity predicate",
                 model_profile=constraints.model_profile,
@@ -53,7 +49,14 @@ def compile_catalyzed_hwp(
             for term, target in zip(batch, parity_qubits, strict=True):
                 append_parity_into(operations, term.mask, target)
             if size == 1:
-                operations.append(Operation("phase", (parity_qubits[0],), batch[0].angle_id, 1))
+                operations.append(
+                    Operation(
+                        "phase",
+                        (parity_qubits[0],),
+                        group.angle_id,
+                        group.coefficient,
+                    )
+                )
             else:
                 weight_width = size.bit_length()
                 scratch_width = max(size - 1, weight_width)
@@ -78,8 +81,8 @@ def compile_catalyzed_hwp(
                     Operation(
                         "phase_gradient",
                         tuple(weight_qubits),
-                        batch[0].angle_id,
-                        1,
+                        group.angle_id,
+                        group.coefficient,
                         {
                             "batch_size": size,
                             "gradient_toffolis": gradient_toffolis,
@@ -92,10 +95,15 @@ def compile_catalyzed_hwp(
                 operations.append(
                     Operation("hwp_uncompute", tuple(parity_qubits + scratch), payload=payload)
                 )
-                resource_states[(batch[0].angle_id, weight_width)] = {
+                resource_states[
+                    (group.angle_id, group.coefficient, weight_width)
+                ] = {
                     "kind": "phase_gradient_catalyst",
-                    "angle_id": batch[0].angle_id,
-                    "multipliers": [1 << bit for bit in range(weight_width)],
+                    "angle_id": group.angle_id,
+                    "multipliers": [
+                        group.coefficient * (1 << bit)
+                        for bit in range(weight_width)
+                    ],
                     "qubits": weight_width,
                     "preparation": "Rz(2^i theta)|+> for each catalyst qubit",
                     "returned_ideally": True,
@@ -105,19 +113,21 @@ def compile_catalyzed_hwp(
             trace.append(
                 {
                     "action": "catalyzed_hwp_batch",
-                    "block": block.id,
+                    "block_id": group.block_id,
+                    "group_id": group.id,
                     "batch": batch_index,
                     "term_ids": [term.id for term in batch],
                     "size": size,
                 }
             )
     return Candidate(
-        method="catalyzed_hwp",
-        version="0.1",
+        method="catalyzed_hwp_unverified",
+        version="0.2",
         program=program,
         status="success",
         operations=operations,
         workspace_qubits=peak,
+        global_phase=normalized.global_phase,
         model_profile=constraints.model_profile,
         parameters={
             "workspace_budget": constraints.workspace_budget,
@@ -131,5 +141,9 @@ def compile_catalyzed_hwp(
             "catalyst approximation error is charged once, not reset per reuse",
             "published Hamming-weight and generalized phase-gradient macros apply",
         ],
-        accounting_status="estimated_macro",
+        accounting_status="unverified_estimate",
+        implementation_family="catalyzed_hwp",
+        variant="legacy_formula_macro_unverified",
+        objective=constraints.objective,
+        preprocessing_version=PREPROCESSING_VERSION,
     )
