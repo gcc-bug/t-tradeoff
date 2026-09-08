@@ -1,9 +1,14 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
-from collective_phase.experiments import run_experiments, verify_result_rows
+from collective_phase.experiments import (
+    render_report,
+    run_experiments,
+    verify_result_rows,
+)
 
 
 @pytest.fixture
@@ -158,3 +163,47 @@ def test_schema_v1_row_is_excluded_from_primary_evidence(tmp_path):
     verified = verify_result_rows(results, tmp_path)
     assert verified["status"] == "verification_failure"
     assert "unsupported result schema" in verified["failures"][0]
+
+
+def test_report_leads_with_raw_rotation_arithmetic_tradeoff():
+    common = {
+        "schema_version": 2,
+        "status": "success",
+        "primary_eligible": True,
+        "lowered_verification_status": "verified_lowered_dense",
+        "stratum": "synthetic_diagnostic",
+        "case_id": "triple",
+        "code_revision": "test-revision",
+        "config_hash": "test-config",
+        "generic_application_rotations": 3,
+        "exact_application_rotations": 0,
+        "logical_toffoli_count": 0,
+        "logical_cx_count": 6,
+        "peak_workspace": 0,
+        "t_count": 150,
+        "t_depth": 150,
+        "error_bound": 1e-5,
+        "operation_signature": "direct",
+    }
+    direct = {**common, "method": "independent"}
+    raw = {
+        **common,
+        "method": "dependent_triples_raw",
+        "used_rewrite": True,
+        "matched_triples": 1,
+        "generic_application_rotations": 1,
+        "logical_toffoli_count": 2,
+        "logical_cx_count": 12,
+        "peak_workspace": 3,
+        "t_count": 58,
+        "t_depth": 52,
+        "operation_signature": "raw",
+    }
+
+    report = render_report([direct, raw], Path("results/test"))
+
+    assert report.index("## Raw mechanism tradeoff") < report.index(
+        "## Absolute construction results"
+    )
+    assert "fired in 1 of 1 cases and matched 1 disjoint triples" in report
+    assert "| synthetic_diagnostic | triple | 1 | -2 | +2 | +6 | +3 |" in report

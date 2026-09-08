@@ -3,7 +3,8 @@
 Date: 2026-09-08
 
 Starting revision: `32ad1131eb16eabdeb04d75fd4b90f344ea0c7e9`.
-The initial test suite passed 48 tests. The repaired suite passes 86 tests.
+The initial test suite passed 48 tests. The initial remediation suite passed 86
+tests; the subsequent tradeoff-reporting extension passes 88 tests.
 
 Environment:
 
@@ -31,7 +32,8 @@ The PyPA `python -m build` frontend was not installed in the test environment;
 the isolated wheel command above succeeded and produced
 `collective_phase-0.1.0-py3-none-any.whl`.
 
-The repaired pilot produced 104 successful rows. All 104 were reconstructed
+The repaired pilot produced 104 successful rows. The tradeoff-focused replay
+also produced 104 successful rows. All rows in each run were reconstructed
 from schema-v2 artifacts and passed target, ideal semantics, deterministic
 lowering, independent emitted-gate, synthesis-error, and resource replay.
 Dense verification uses a declared memory preflight; larger gate streams are

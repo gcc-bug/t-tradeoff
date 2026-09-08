@@ -26,6 +26,11 @@ arithmetic/workspace as the primary result; fully lowered T metrics and
 objective-selected fallback are secondary. See
 `reports/m2-reliable-evaluation.md`.
 
+The tradeoff-focused pilot has 104 successful rows. The raw rule fires in 6 of
+13 cases, matching 11 triples and exchanging 22 generic rotations for 22
+logical Toffolis, 66 observed CNOTs, and three reusable clean ancillas. The
+current test suite contains 88 passing tests.
+
 M2-R status: complete for the unitary reference milestone. The emitted ANF HWP
 is correctness-complete but is not a competitive reproduction of published
 in-place or measurement-assisted HWP. Catalytic and joint-synthesis comparisons

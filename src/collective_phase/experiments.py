@@ -1345,7 +1345,7 @@ def render_report(
             "operations before Clifford+T lowering.",
             "",
             "| Stratum | Case | Method | Status | Rotations | Toffoli | CNOT | "
-            "Workspace | T | T-depth | Error bound | Verification | Primary |",
+            "Workspace | T | T-depth | Error bound | Verification | Evidence eligible |",
             "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | "
             "---: | ---: | --- | --- |",
         ]

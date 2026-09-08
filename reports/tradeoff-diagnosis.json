@@ -1,0 +1,874 @@
+[
+  {
+    "binary_rank": 3,
+    "case_id": "qedc_mc_004_003_000",
+    "coverage_fraction": 1.0,
+    "dependency_witnesses": [
+      [
+        0,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        4
+      ],
+      [
+        1,
+        2,
+        5
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        5,
+        6
+      ],
+      [
+        3,
+        9,
+        10
+      ],
+      [
+        5,
+        9,
+        12
+      ],
+      [
+        6,
+        10,
+        12
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "10": 1,
+      "12": 1,
+      "3": 1,
+      "5": 1,
+      "6": 1,
+      "9": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 6
+    },
+    "graph": {
+      "component_sizes": [
+        4
+      ],
+      "degree_sequence": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "edge_count": 6,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 4
+    },
+    "support_histogram": {
+      "2": 6
+    },
+    "term_count": 6,
+    "unique_parities": 6,
+    "variables": 4
+  },
+  {
+    "binary_rank": 5,
+    "case_id": "qedc_mc_006_003_000",
+    "coverage_fraction": 0.6666666666666666,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        4
+      ],
+      [
+        0,
+        2,
+        3,
+        6
+      ],
+      [
+        0,
+        1,
+        3,
+        5,
+        7
+      ],
+      [
+        0,
+        2,
+        3,
+        5,
+        8
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        17,
+        18
+      ],
+      [
+        12,
+        36,
+        40
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "12": 1,
+      "17": 1,
+      "18": 1,
+      "24": 1,
+      "3": 1,
+      "33": 1,
+      "36": 1,
+      "40": 1,
+      "6": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 9
+    },
+    "graph": {
+      "component_sizes": [
+        6
+      ],
+      "degree_sequence": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "edge_count": 9,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 2
+    },
+    "support_histogram": {
+      "2": 9
+    },
+    "term_count": 9,
+    "unique_parities": 9,
+    "variables": 6
+  },
+  {
+    "binary_rank": 7,
+    "case_id": "qedc_mc_008_003_000",
+    "coverage_fraction": 0.5,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        3
+      ],
+      [
+        0,
+        1,
+        4,
+        5,
+        6,
+        8
+      ],
+      [
+        6,
+        7,
+        9
+      ],
+      [
+        0,
+        2,
+        4,
+        10
+      ],
+      [
+        1,
+        2,
+        5,
+        7,
+        11
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        129,
+        130
+      ],
+      [
+        20,
+        36,
+        48
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "10": 1,
+      "129": 1,
+      "130": 1,
+      "132": 1,
+      "20": 1,
+      "24": 1,
+      "3": 1,
+      "36": 1,
+      "48": 1,
+      "65": 1,
+      "72": 1,
+      "96": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 12
+    },
+    "graph": {
+      "component_sizes": [
+        8
+      ],
+      "degree_sequence": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "edge_count": 12,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 2
+    },
+    "support_histogram": {
+      "2": 12
+    },
+    "term_count": 12,
+    "unique_parities": 12,
+    "variables": 8
+  },
+  {
+    "binary_rank": 7,
+    "case_id": "diagnostic_path_8",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "12": 1,
+      "192": 1,
+      "24": 1,
+      "3": 1,
+      "48": 1,
+      "6": 1,
+      "96": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 7
+    },
+    "graph": {
+      "component_sizes": [
+        8
+      ],
+      "degree_sequence": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1
+      ],
+      "edge_count": 7,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 0
+    },
+    "support_histogram": {
+      "2": 7
+    },
+    "term_count": 7,
+    "unique_parities": 7,
+    "variables": 8
+  },
+  {
+    "binary_rank": 7,
+    "case_id": "diagnostic_cycle_8",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    ],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "12": 1,
+      "129": 1,
+      "192": 1,
+      "24": 1,
+      "3": 1,
+      "48": 1,
+      "6": 1,
+      "96": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 8
+    },
+    "graph": {
+      "component_sizes": [
+        8
+      ],
+      "degree_sequence": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "edge_count": 8,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 0
+    },
+    "support_histogram": {
+      "2": 8
+    },
+    "term_count": 8,
+    "unique_parities": 8,
+    "variables": 8
+  },
+  {
+    "binary_rank": 7,
+    "case_id": "diagnostic_star_8",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "129": 1,
+      "17": 1,
+      "3": 1,
+      "33": 1,
+      "5": 1,
+      "65": 1,
+      "9": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 7
+    },
+    "graph": {
+      "component_sizes": [
+        8
+      ],
+      "degree_sequence": [
+        7,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "edge_count": 7,
+      "repeated_neighborhood_multiplicities": [
+        7
+      ],
+      "triangle_count": 0
+    },
+    "support_histogram": {
+      "2": 7
+    },
+    "term_count": 7,
+    "unique_parities": 7,
+    "variables": 8
+  },
+  {
+    "binary_rank": 2,
+    "case_id": "diagnostic_triangle",
+    "coverage_fraction": 1.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        2
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        5,
+        6
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "3": 1,
+      "5": 1,
+      "6": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 3
+    },
+    "graph": {
+      "component_sizes": [
+        3
+      ],
+      "degree_sequence": [
+        2,
+        2,
+        2
+      ],
+      "edge_count": 3,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 1
+    },
+    "support_histogram": {
+      "2": 3
+    },
+    "term_count": 3,
+    "unique_parities": 3,
+    "variables": 3
+  },
+  {
+    "binary_rank": 5,
+    "case_id": "diagnostic_clique_6",
+    "coverage_fraction": 1.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        5
+      ],
+      [
+        0,
+        2,
+        6
+      ],
+      [
+        0,
+        3,
+        7
+      ],
+      [
+        0,
+        4,
+        8
+      ],
+      [
+        1,
+        2,
+        9
+      ],
+      [
+        1,
+        3,
+        10
+      ],
+      [
+        1,
+        4,
+        11
+      ],
+      [
+        2,
+        3,
+        12
+      ],
+      [
+        2,
+        4,
+        13
+      ],
+      [
+        3,
+        4,
+        14
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        5,
+        6
+      ],
+      [
+        3,
+        9,
+        10
+      ],
+      [
+        3,
+        17,
+        18
+      ],
+      [
+        3,
+        33,
+        34
+      ],
+      [
+        5,
+        9,
+        12
+      ],
+      [
+        5,
+        17,
+        20
+      ],
+      [
+        5,
+        33,
+        36
+      ],
+      [
+        6,
+        10,
+        12
+      ],
+      [
+        6,
+        18,
+        20
+      ],
+      [
+        6,
+        34,
+        36
+      ],
+      [
+        9,
+        17,
+        24
+      ],
+      [
+        9,
+        33,
+        40
+      ],
+      [
+        10,
+        18,
+        24
+      ],
+      [
+        10,
+        34,
+        40
+      ],
+      [
+        12,
+        20,
+        24
+      ],
+      [
+        12,
+        36,
+        40
+      ],
+      [
+        17,
+        33,
+        48
+      ],
+      [
+        18,
+        34,
+        48
+      ],
+      [
+        20,
+        36,
+        48
+      ],
+      [
+        24,
+        40,
+        48
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "10": 1,
+      "12": 1,
+      "17": 1,
+      "18": 1,
+      "20": 1,
+      "24": 1,
+      "3": 1,
+      "33": 1,
+      "34": 1,
+      "36": 1,
+      "40": 1,
+      "48": 1,
+      "5": 1,
+      "6": 1,
+      "9": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 15
+    },
+    "graph": {
+      "component_sizes": [
+        6
+      ],
+      "degree_sequence": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "edge_count": 15,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 20
+    },
+    "support_histogram": {
+      "2": 15
+    },
+    "term_count": 15,
+    "unique_parities": 15,
+    "variables": 6
+  },
+  {
+    "binary_rank": 6,
+    "case_id": "diagnostic_biclique_3_4",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        4,
+        5
+      ],
+      [
+        0,
+        2,
+        4,
+        6
+      ],
+      [
+        0,
+        3,
+        4,
+        7
+      ],
+      [
+        0,
+        1,
+        8,
+        9
+      ],
+      [
+        0,
+        2,
+        8,
+        10
+      ],
+      [
+        0,
+        3,
+        8,
+        11
+      ]
+    ],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "10": 1,
+      "12": 1,
+      "17": 1,
+      "18": 1,
+      "20": 1,
+      "33": 1,
+      "34": 1,
+      "36": 1,
+      "65": 1,
+      "66": 1,
+      "68": 1,
+      "9": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 12
+    },
+    "graph": {
+      "component_sizes": [
+        7
+      ],
+      "degree_sequence": [
+        4,
+        4,
+        4,
+        3,
+        3,
+        3,
+        3
+      ],
+      "edge_count": 12,
+      "repeated_neighborhood_multiplicities": [
+        4,
+        3
+      ],
+      "triangle_count": 0
+    },
+    "support_histogram": {
+      "2": 12
+    },
+    "term_count": 12,
+    "unique_parities": 12,
+    "variables": 7
+  },
+  {
+    "binary_rank": 2,
+    "case_id": "diagnostic_duplicates",
+    "coverage_fraction": 1.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        2,
+        3
+      ]
+    ],
+    "dependent_triples": [
+      [
+        3,
+        5,
+        6
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "3": 2,
+      "5": 1,
+      "6": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 4
+    },
+    "graph": null,
+    "support_histogram": {
+      "2": 4
+    },
+    "term_count": 4,
+    "unique_parities": 3,
+    "variables": 3
+  },
+  {
+    "binary_rank": 3,
+    "case_id": "diagnostic_dependent",
+    "coverage_fraction": 1.0,
+    "dependency_witnesses": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        0,
+        1,
+        3,
+        4
+      ]
+    ],
+    "dependent_triples": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        3,
+        5,
+        6
+      ]
+    ],
+    "duplicate_multiplicities": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "5": 1,
+      "6": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 5
+    },
+    "graph": null,
+    "support_histogram": {
+      "1": 2,
+      "2": 3
+    },
+    "term_count": 5,
+    "unique_parities": 5,
+    "variables": 3
+  },
+  {
+    "binary_rank": 5,
+    "case_id": "negative_weighted_path",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "12": 1,
+      "24": 1,
+      "3": 1,
+      "48": 1,
+      "6": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 5
+    },
+    "graph": {
+      "component_sizes": [
+        6
+      ],
+      "degree_sequence": [
+        2,
+        2,
+        2,
+        2,
+        1,
+        1
+      ],
+      "edge_count": 5,
+      "repeated_neighborhood_multiplicities": [],
+      "triangle_count": 0
+    },
+    "support_histogram": {
+      "2": 5
+    },
+    "term_count": 5,
+    "unique_parities": 5,
+    "variables": 6
+  },
+  {
+    "binary_rank": 4,
+    "case_id": "negative_irregular_masks",
+    "coverage_fraction": 0.0,
+    "dependency_witnesses": [],
+    "dependent_triples": [],
+    "duplicate_multiplicities": {
+      "12": 1,
+      "21": 1,
+      "3": 1,
+      "42": 1
+    },
+    "exact_angle_classes": {
+      "theta_0173": 4
+    },
+    "graph": null,
+    "support_histogram": {
+      "2": 2,
+      "3": 2
+    },
+    "term_count": 4,
+    "unique_parities": 4,
+    "variables": 6
+  }
+]
