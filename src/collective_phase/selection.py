@@ -5,7 +5,7 @@ from typing import Any
 
 from .circuit import Candidate
 from .lowering import LoweredCircuit, RotationSynthesizer, lower_candidate
-from .resources import ResourceRecord, estimate_resources
+from .resources import ResourceRecord, characterize_tradeoff, estimate_resources
 from .verification import (
     LoweredVerificationResult,
     VerificationResult,
@@ -76,6 +76,11 @@ class EvaluatedAlternative:
         value["lowering"] = None if self.lowered is None else self.lowered.to_dict()
         value["resources"] = (
             None if self.resources is None else self.resources.to_dict()
+        )
+        value["tradeoff"] = (
+            None
+            if self.lowered is None
+            else characterize_tradeoff(self.lowered).to_dict()
         )
         return value
 

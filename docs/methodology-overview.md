@@ -19,11 +19,13 @@ their Boolean values are a, b, and a XOR b, then:
 
 It computes a and b into two clean qubits, computes a OR b into a third,
 applies one phase with angle 2 theta c, and uncomputes everything. The
-tradeoff is two fewer arbitrary rotations in exchange for two Toffolis,
-additional Clifford gates, and three clean work qubits. The raw compiler keeps
-the rewrite even when this loses. The selected compiler lowers the raw,
-independent, and shared-parity alternatives under the same total error budget
-and chooses by the declared objective with a deterministic tie-break.
+tradeoff per matched triple is two fewer arbitrary rotations in exchange for
+two Toffolis, support-dependent Clifford work, and three reusable clean work
+qubits. The current pilot observes six additional CNOTs per matched triple.
+The raw compiler is the research object and keeps the rewrite even when a
+downstream metric loses. The selected compiler is a separate deployment
+policy: it lowers the raw, independent, and shared-parity alternatives under
+the same total error budget and chooses by the declared objective.
 
 Ordinary Hamming-weight phasing is evaluated in three explicit forms:
 
@@ -47,6 +49,7 @@ retained as a regression and teaching case.
       -> shared preprocessing and structural profile
       -> explicit compiler variants
       -> ideal semantic verification
+      -> raw rotation/arithmetic/workspace characterization
       -> common Clifford+T lowering and rotation synthesis
       -> independent emitted-gate verification
       -> dependency scheduling and resource accounting
@@ -66,12 +69,13 @@ primitive streams, replayed lowering, exact transformation certificates, and
 the sum of independently recomputed rotation errors. Macro events never count
 as emitted verification.
 
-Every successful schema-v2 row stores the program, candidate, rotations,
-lowered events, global phase, verification evidence, resource record, and all
-selection alternatives. Verification reconstructs these objects and recomputes
-the target identity, ideal semantics, lowering, synthesis bound, gate-level
-evidence, and resources. Hashes detect accidental changes; replay detects
-semantically invalid changes even if a hash is updated.
+Every successful schema-v2 row stores the program, candidate, rotation counts,
+logical arithmetic and CNOT counts, lowered events, global phase, verification
+evidence, resource record, and all selection alternatives. Verification
+reconstructs these objects and recomputes the target identity, ideal semantics,
+tradeoff signature, lowering, synthesis bound, gate-level evidence, and
+resources. Hashes detect accidental changes; replay detects semantically
+invalid changes even if a hash is updated.
 
 ## Benchmarks and reporting
 
@@ -85,10 +89,11 @@ work qubits, and the unitary Clifford+T model.
 | Synthetic diagnostic | 8 predeclared graph and parity cases | Mechanism and failure-regime diagnosis |
 | Negative control | 2 weighted or irregular cases | Confirm no manufactured applicability |
 
-Reports show absolute T-count, scheduled logical T-depth, peak workspace,
-error bound, selected construction, and verification scope per instance.
-Wins, ties, and regressions use matched populations for each named baseline and
-for the best eligible strong baseline. Legacy macro estimates are displayed
-separately and cannot enter primary rankings. The emitted HWP implementation is
-a correctness reference, not yet a competitive reproduction of published
-in-place or measurement-assisted HWP.
+The report leads with the raw candidate's changes in generic rotations,
+Toffolis, CNOTs, and workspace against normalized independent synthesis.
+T-count, scheduled logical T-depth, error bound, and verification scope remain
+visible as consequences of that exchange. Objective-selected wins, ties, and
+regressions are a secondary deployment-policy analysis. Legacy macro estimates
+cannot enter primary evidence. The emitted HWP implementation is a correctness
+reference, not yet a competitive reproduction of published in-place or
+measurement-assisted HWP.

@@ -15,12 +15,16 @@ undecided, so double-blind safeguards are required for any shared artifact.
 Implemented canonical block-local preprocessing, explicit method variants,
 emitted unitary HWP arithmetic, full-circuit batch selection, raw and selected
 triple methods, independent lowered-gate verification, schema-v2 artifact
-replay, recomputed resources, benchmark strata, and matched reporting.
+replay, recomputed rotation/arithmetic tradeoff records, benchmark strata, and
+matched reporting.
 
 The repaired development pilot contains the original three checksum-pinned
 QED-C inputs, eight diagnostics, and two negative controls at angle 0.173,
 total operator-norm budget 1e-4, and workspace budget 8. All repaired rows and
-artifacts pass replay. See `reports/m2-reliable-evaluation.md`.
+artifacts pass replay. The current report treats raw rotation savings and added
+arithmetic/workspace as the primary result; fully lowered T metrics and
+objective-selected fallback are secondary. See
+`reports/m2-reliable-evaluation.md`.
 
 M2-R status: complete for the unitary reference milestone. The emitted ANF HWP
 is correctness-complete but is not a competitive reproduction of published
@@ -43,11 +47,11 @@ falsifiable hypothesis and a stronger baseline implementation.
 ```bash
 python -m pip install -e '.[test]'
 pytest
-python -m collective_phase audit --config configs/repair-pilot.yaml
-python -m collective_phase acquire --config configs/repair-pilot.yaml
-python -m collective_phase run --config configs/repair-pilot.yaml
-python -m collective_phase verify --results results/raw/repair-pilot
-python -m collective_phase report --results results/raw/repair-pilot \
+python -m collective_phase audit --config configs/tradeoff-pilot.yaml
+python -m collective_phase acquire --config configs/tradeoff-pilot.yaml
+python -m collective_phase run --config configs/tradeoff-pilot.yaml
+python -m collective_phase verify --results results/raw/tradeoff-pilot
+python -m collective_phase report --results results/raw/tradeoff-pilot \
   --output reports/m2-reliable-evaluation.md
 ```
 

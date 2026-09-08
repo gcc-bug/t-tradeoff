@@ -9,7 +9,7 @@ from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.candidates import compile_dependent_triples
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer, lower_candidate
-from collective_phase.resources import estimate_resources
+from collective_phase.resources import characterize_tradeoff, estimate_resources
 
 
 def _apply_gate(state, event, total_qubits):
@@ -124,3 +124,31 @@ def test_generic_lowering_retains_backend_global_phase_tokens(tmp_path):
     )
     expected = state * np.array([1, cmath.exp(1j * 0.173)])
     assert np.linalg.norm(actual - expected) <= 1e-4
+
+
+def test_raw_triple_exposes_rotation_for_arithmetic_tradeoff(tmp_path):
+    pytest.importorskip("pygridsynth")
+    program = make_program(
+        "triple", 2, [1, 2, 3], AngleBinding("theta", "0.173")
+    )
+    constraints = CompilationConstraints(3, "unitary_clifford_t")
+    synthesizer = RotationSynthesizer(tmp_path / "cache.json")
+    raw = characterize_tradeoff(
+        lower_candidate(
+            compile_dependent_triples(program, constraints),
+            1e-4,
+            synthesizer,
+        )
+    )
+    direct = characterize_tradeoff(
+        lower_candidate(
+            compile_independent(program, constraints),
+            1e-4,
+            synthesizer,
+        )
+    )
+
+    assert raw.generic_application_rotations == 1
+    assert direct.generic_application_rotations == 3
+    assert raw.logical_toffoli_count - direct.logical_toffoli_count == 2
+    assert raw.logical_cx_count - direct.logical_cx_count == 6

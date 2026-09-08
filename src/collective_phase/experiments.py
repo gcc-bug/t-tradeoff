@@ -36,7 +36,7 @@ from .lowering import (
 )
 from .preprocessing import PREPROCESSING_VERSION
 from .profiles import StructuralProfile, profile
-from .resources import ResourceRecord, estimate_resources
+from .resources import ResourceRecord, characterize_tradeoff, estimate_resources
 from .selection import SelectionResult, select_lowered_candidate
 from .verification import (
     LoweredVerificationResult,
@@ -206,6 +206,9 @@ def audit_configuration(config: dict[str, Any]) -> dict[str, Any]:
         "semantic_profile": SEMANTIC_PROFILE,
         "preprocessing_version": PREPROCESSING_VERSION,
         "metric_profiles": config.get("model_profiles", []),
+        "analysis_focus": config.get(
+            "analysis_focus", "fully_lowered_resource_outcomes"
+        ),
         "basic_run_ready": executable,
         "strong_comparison_methods": strong_methods,
         "strong_comparison_ready": executable and bool(strong_methods),
@@ -391,6 +394,7 @@ def _base_row(
         "selected_from": None,
         "selected_construction": None,
         "used_rewrite": False,
+        "matched_triples": 0,
         "accounting_status": None,
         "primary_eligible": False,
         "ideal_verification_status": "not_run",
@@ -407,6 +411,15 @@ def _base_row(
         "adaptive_rounds": None,
         "preparation_t": None,
         "application_t": None,
+        "application_rotations": None,
+        "generic_application_rotations": None,
+        "exact_application_rotations": None,
+        "preparation_rotations": None,
+        "generic_preparation_rotations": None,
+        "exact_preparation_rotations": None,
+        "logical_toffoli_count": None,
+        "logical_cx_count": None,
+        "logical_x_count": None,
         "compile_seconds": None,
         "circuit_path": None,
         "circuit_hash": None,
@@ -465,6 +478,10 @@ def run_experiments(
                                     "method": method,
                                     "reuse_count": int(reuse),
                                     "objective": objective,
+                                    "analysis_focus": config.get(
+                                        "analysis_focus",
+                                        "fully_lowered_resource_outcomes",
+                                    ),
                                     "config_hash": cfg_hash,
                                     "manifest_hash": input_manifest_hash,
                                     "code_revision": revision,
@@ -524,6 +541,11 @@ def run_experiments(
                                                     "used_rewrite", False
                                                 )
                                             ),
+                                            "matched_triples": int(
+                                                candidate.parameters.get(
+                                                    "matched_triples", 0
+                                                )
+                                            ),
                                             "accounting_status": candidate.accounting_status,
                                             "ideal_verification_status": executed.ideal_verification.status,
                                             "peak_workspace": candidate.workspace_qubits,
@@ -567,6 +589,10 @@ def run_experiments(
                                             row.update(
                                                 executed.resources.to_dict()
                                             )
+                                            tradeoff = characterize_tradeoff(
+                                                executed.lowered
+                                            )
+                                            row.update(tradeoff.to_dict())
                                             row["error_bound"] = (
                                                 executed.lowered.error_bound
                                             )
@@ -599,6 +625,7 @@ def run_experiments(
                                                 "lowered_verification": executed.lowered_verification.to_dict(),
                                                 "lowering": executed.lowered.to_dict(),
                                                 "resources": executed.resources.to_dict(),
+                                                "tradeoff": tradeoff.to_dict(),
                                                 "alternatives": (
                                                     executed.alternatives
                                                     or []
@@ -765,6 +792,15 @@ def verify_result_rows(
             "application_t",
             "preparation_depth",
             "application_depth",
+            "application_rotations",
+            "generic_application_rotations",
+            "exact_application_rotations",
+            "preparation_rotations",
+            "generic_preparation_rotations",
+            "exact_preparation_rotations",
+            "logical_toffoli_count",
+            "logical_cx_count",
+            "logical_x_count",
             "reuse_count",
             "amortized_t",
         ):
@@ -866,6 +902,23 @@ def verify_result_rows(
                             f"{row_id}: row resource {key} "
                             "does not recompute"
                         )
+                tradeoff = characterize_tradeoff(lowered)
+                if tradeoff.to_dict() != artifact.get("tradeoff"):
+                    failures.append(
+                        f"{row_id}: stored artifact tradeoff does not recompute"
+                    )
+                for key, value in tradeoff.to_dict().items():
+                    if row.get(key) != value:
+                        failures.append(
+                            f"{row_id}: row tradeoff {key} does not recompute"
+                        )
+                expected_matched = int(
+                    candidate.parameters.get("matched_triples", 0)
+                )
+                if row.get("matched_triples") != expected_matched:
+                    failures.append(
+                        f"{row_id}: matched triple count does not recompute"
+                    )
                 if row.get("error_bound") != lowered.error_bound:
                     failures.append(
                         f"{row_id}: row error bound does not recompute"
@@ -939,7 +992,7 @@ def verify_result_rows(
                     continue
                 (
                     alternative_failures,
-                    _,
+                    alternative_lowered,
                     alternative_resources,
                     alternative_verification,
                 ) = _verify_lowering_artifact(
@@ -950,6 +1003,14 @@ def verify_result_rows(
                     alternative.get("resources"),
                 )
                 failures.extend(alternative_failures)
+                if alternative_lowered is not None:
+                    alternative_tradeoff = characterize_tradeoff(
+                        alternative_lowered
+                    ).to_dict()
+                    if alternative.get("tradeoff") != alternative_tradeoff:
+                        failures.append(
+                            f"{row_id}:alternative:{index}: tradeoff does not recompute"
+                        )
                 if (
                     alternative_verification is not None
                     and alternative_verification.to_dict()
@@ -1066,7 +1127,8 @@ def verify_result_rows(
         ),
         "scope": (
             "schema-v2 target, ideal semantics, deterministic lowering, "
-            "independent emitted gates, synthesis errors, and resources"
+            "independent emitted gates, rotation-arithmetic tradeoffs, "
+            "synthesis errors, and resources"
         ),
     }
 
@@ -1089,6 +1151,7 @@ def _comparison_key(row: dict[str, Any]) -> tuple:
             "config_hash",
             "manifest_hash",
             "objective",
+            "analysis_focus",
             "stratum",
         )
     )
@@ -1169,14 +1232,19 @@ def render_report(
         {row.get("stratum", "unclassified") for row in rows}
     )
     lines = [
-        "# M2-R Reliable Evaluation",
+        "# M2-R Rotation-Arithmetic Tradeoff Evaluation",
         "",
         f"Results: {results_path}",
         "",
-        "This development pilot compares fully lowered unitary circuits "
-        "under matched operator-norm error and workspace budgets. Legacy "
-        "macros and unresolved catalytic or measurement-assisted estimates "
-        "are shown but excluded from primary rankings.",
+        "The primary question in this development pilot is the structural "
+        "tradeoff: how many arbitrary rotation syntheses are removed, and "
+        "what reversible arithmetic, Clifford work, and clean workspace "
+        "replace them. T-count and T-depth are reported as consequences "
+        "under one matched lowering configuration, not as the research "
+        "objective by themselves.",
+        "",
+        "Legacy macros and unresolved catalytic or measurement-assisted "
+        "estimates are excluded from primary evidence.",
         "",
         "## Status",
         "",
@@ -1185,15 +1253,101 @@ def render_report(
         f"- {status}: {count}"
         for status, count in sorted(statuses.items())
     )
+    raw_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for methods in paired.values():
+        raw = methods.get("dependent_triples_raw")
+        direct = methods.get("independent")
+        if _eligible(raw) and _eligible(direct):
+            assert raw is not None and direct is not None
+            raw_pairs.append((raw, direct))
+    raw_pairs.sort(
+        key=lambda pair: (
+            pair[0].get("stratum", ""),
+            pair[0]["case_id"],
+        )
+    )
+    active_pairs = [pair for pair in raw_pairs if pair[0].get("used_rewrite")]
+    matched_triples = sum(
+        int(raw.get("matched_triples", 0)) for raw, _ in active_pairs
+    )
+    rotation_delta = sum(
+        int(raw["generic_application_rotations"])
+        - int(direct["generic_application_rotations"])
+        for raw, direct in active_pairs
+    )
+    toffoli_delta = sum(
+        int(raw["logical_toffoli_count"])
+        - int(direct["logical_toffoli_count"])
+        for raw, direct in active_pairs
+    )
+    cx_delta = sum(
+        int(raw["logical_cx_count"])
+        - int(direct["logical_cx_count"])
+        for raw, direct in active_pairs
+    )
+    if matched_triples:
+        observed_signature = (
+            "The aggregate observed signature per matched triple in this "
+            f"pilot is `{rotation_delta / matched_triples:+g}` generic "
+            f"rotations, `{toffoli_delta / matched_triples:+g}` logical "
+            f"Toffolis, and `{cx_delta / matched_triples:+g}` CNOTs. The "
+            "CNOT exchange depends on predicate supports and the parity "
+            "network; it is not a universal constant of the identity."
+        )
+    else:
+        observed_signature = "No matched triple was observed in this run."
     lines.extend(
         [
             "",
-            "## Absolute results",
+            "## Raw mechanism tradeoff",
             "",
-            "| Stratum | Case | Method | Variant or selection | Status | T | "
-            "T-depth | Workspace | Error bound | Verification | Primary |",
-            "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | "
-            "--- | --- |",
+            "The comparison below uses the raw rule, not the objective-selected "
+            "fallback. Deltas are `raw - independent`, so a negative rotation "
+            "delta means that the rewrite removed rotation syntheses.",
+            "",
+            f"The rule fired in {len(active_pairs)} of {len(raw_pairs)} cases "
+            f"and matched {matched_triples} disjoint triples. Across the active "
+            f"cases it exchanged {-rotation_delta} generic rotations for "
+            f"{toffoli_delta} logical Toffolis and {cx_delta} CNOTs. The three "
+            "clean workspace qubits are reused across triples within a circuit.",
+            "",
+            "| Stratum | Case | Triples | Delta generic rotations | "
+            "Delta Toffolis | Delta CNOTs | Delta workspace | Delta T | "
+            "Delta T-depth |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for raw, direct in raw_pairs:
+        lines.append(
+            f"| {raw.get('stratum', 'unclassified')} | {raw['case_id']} | "
+            f"{raw.get('matched_triples', 0)} | "
+            f"{int(raw['generic_application_rotations']) - int(direct['generic_application_rotations']):+d} | "
+            f"{int(raw['logical_toffoli_count']) - int(direct['logical_toffoli_count']):+d} | "
+            f"{int(raw['logical_cx_count']) - int(direct['logical_cx_count']):+d} | "
+            f"{int(raw['peak_workspace']) - int(direct['peak_workspace']):+d} | "
+            f"{int(raw['t_count']) - int(direct['t_count']):+d} | "
+            f"{int(raw['t_depth']) - int(direct['t_depth']):+d} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            observed_signature,
+            "",
+            "T and T-depth deltas depend on angle, synthesis tolerance, "
+            "parallelism, and the number of rotations sharing the total error "
+            "budget; they are not the definition of the tradeoff.",
+            "",
+            "## Absolute construction results",
+            "",
+            "`Rotations` is shown as generic/exact application requests before "
+            "gate decomposition. Toffoli and CNOT counts are logical emitted "
+            "operations before Clifford+T lowering.",
+            "",
+            "| Stratum | Case | Method | Status | Rotations | Toffoli | CNOT | "
+            "Workspace | T | T-depth | Error bound | Verification | Primary |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | "
+            "---: | ---: | --- | --- |",
         ]
     )
     for row in sorted(
@@ -1207,18 +1361,30 @@ def render_report(
         lines.append(
             f"| {row.get('stratum', 'unclassified')} | "
             f"{row['case_id']} | {row['method']} | "
-            f"{row.get('selected_construction') or 'n/a'} | "
             f"{row['status']} | "
+            f"{row.get('generic_application_rotations', 'n/a')}/"
+            f"{row.get('exact_application_rotations', 'n/a')} | "
+            f"{row.get('logical_toffoli_count', 'n/a')} | "
+            f"{row.get('logical_cx_count', 'n/a')} | "
+            f"{row.get('peak_workspace') if row.get('peak_workspace') is not None else 'n/a'} | "
             f"{row.get('t_count') if row.get('t_count') is not None else 'n/a'} | "
             f"{row.get('t_depth') if row.get('t_depth') is not None else 'n/a'} | "
-            f"{row.get('peak_workspace') if row.get('peak_workspace') is not None else 'n/a'} | "
             f"{row.get('error_bound') if row.get('error_bound') is not None else 'n/a'} | "
             f"{row.get('lowered_verification_status', 'not_run')} | "
             f"{'yes' if row.get('primary_eligible') else 'no'} |"
         )
 
     lines.extend(
-        ["", "## Paired T-count comparisons", ""]
+        [
+            "",
+            "## Secondary deployment-policy comparison",
+            "",
+            "For completeness, the selected method uses the configured "
+            "T-count objective to decide whether to deploy the rewrite or "
+            "fall back. These win/tie/regression tables evaluate that policy; "
+            "they do not define or discover the structural tradeoff.",
+            "",
+        ]
     )
     for stratum in strata:
         populations = [
@@ -1306,7 +1472,9 @@ def render_report(
         [
             "## Structural decision",
             "",
-            "The raw triple and dependency-simplified HWP artifacts emit "
+            "The rotation-for-arithmetic exchange above is present and "
+            "measurable. Separately, the raw triple and dependency-simplified "
+            "HWP artifacts emit "
             f"the same operation stream on {overlap} of "
             f"{overlap_denominator} matched cases.",
             "The current triple construction is therefore subsumed by that "

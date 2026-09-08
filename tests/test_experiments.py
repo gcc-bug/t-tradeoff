@@ -69,6 +69,20 @@ def test_replay_rejects_mutated_stored_resource_count(stored_run):
     assert any("t_count does not recompute" in item for item in verified["failures"])
 
 
+def test_replay_rejects_mutated_tradeoff_count(stored_run):
+    root, results = stored_run
+    path = _row_path(results)
+    row = json.loads(path.read_text(encoding="utf-8"))
+    row["generic_application_rotations"] += 1
+    path.write_text(json.dumps(row), encoding="utf-8")
+    verified = verify_result_rows(results, root)
+    assert verified["status"] == "verification_failure"
+    assert any(
+        "generic_application_rotations does not recompute" in item
+        for item in verified["failures"]
+    )
+
+
 def test_replay_rejects_mutated_event_even_with_updated_hash(stored_run):
     root, results = stored_run
     row_path = _row_path(results)

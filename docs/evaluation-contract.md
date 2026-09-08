@@ -8,9 +8,12 @@ synthesis budget, workspace budget, gate model, application count, and
 objective. Coefficients are exact integers and angle classes are joined by ID,
 never approximate numeric equality.
 
-The primary metrics are T-count, scheduled logical T-depth, and peak extra
-logical qubits. The schedule is a valid emitted dependency schedule, not an
-optimal-depth or minimum-workspace claim.
+The primary analysis characterizes the raw rotation-for-arithmetic exchange:
+generic and exact application-rotation requests, logical Toffolis, logical
+CNOTs, and peak clean workspace. T-count and scheduled logical T-depth are
+downstream outcome metrics under a declared synthesis and gate model. The
+schedule is a valid emitted dependency schedule, not an optimal-depth or
+minimum-workspace claim.
 
 ## Evidence levels
 
@@ -36,7 +39,10 @@ criteria. Pareto mode accepts the preferred rewrite only when it dominates or
 ties all eligible alternatives; otherwise it falls back.
 
 All alternatives, failures, resource tuples, and the nondominated set are
-stored. Estimated macros cannot enter an emitted selection pool.
+stored. This selection is a secondary deployment policy. The main analysis
+always reports the raw candidate against normalized independent synthesis, so
+fallback cannot erase an unfavorable or otherwise interesting tradeoff.
+Estimated macros cannot enter an emitted selection pool.
 
 ## Pairing and strata
 

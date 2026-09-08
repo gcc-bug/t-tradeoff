@@ -32,18 +32,20 @@ generic `Rz` rotations.  Exact multiples of `pi/4` bypass approximate
 synthesis.  The compiler records the global phase introduced by translating
 `P(theta) = diag(1, exp(i theta))` to `Rz(theta)`.
 
-## Repaired reproduction
+## Tradeoff evaluation
 
-The repaired development pilot contains three checksum-pinned QED-C MaxCut
-instances plus separately labeled diagnostics and negative controls:
+The current development pilot contains three checksum-pinned QED-C MaxCut
+instances plus separately labeled diagnostics and negative controls. Its
+primary output is the raw rotation-for-arithmetic tradeoff; T-count selection
+is reported only as a secondary deployment policy:
 
 ```bash
-python -m collective_phase audit --config configs/repair-pilot.yaml
-python -m collective_phase acquire --config configs/repair-pilot.yaml
-python -m collective_phase profile --config configs/repair-pilot.yaml
-python -m collective_phase run --config configs/repair-pilot.yaml
-python -m collective_phase verify --results results/raw/repair-pilot
-python -m collective_phase report --results results/raw/repair-pilot \
+python -m collective_phase audit --config configs/tradeoff-pilot.yaml
+python -m collective_phase acquire --config configs/tradeoff-pilot.yaml
+python -m collective_phase profile --config configs/tradeoff-pilot.yaml
+python -m collective_phase run --config configs/tradeoff-pilot.yaml
+python -m collective_phase verify --results results/raw/tradeoff-pilot
+python -m collective_phase report --results results/raw/tradeoff-pilot \
   --output reports/m2-reliable-evaluation.md
 ```
 
@@ -58,11 +60,13 @@ The repaired runner uses explicit method identities. Emitted methods include
 `dependent_triples_raw`, and `dependent_triples_selected`.
 `hwp_macro_legacy` is shown only as historical formula evidence.
 
-The current triple rewrite is exactly reproduced by dependency-simplified HWP
-on every repaired pilot case. It is therefore retained as a regression case,
-not reported as a surviving new method. Joint synthesis, catalytic HWP, and
-measurement-assisted HWP remain unavailable or unverified under matching
-semantics.
+The evaluator first compares `dependent_triples_raw` with `independent` using
+generic-rotation, logical-Toffoli, CNOT, and clean-workspace counts. It then
+shows T-count and T-depth outcomes under the configured lowering. The current
+triple rewrite is exactly reproduced by dependency-simplified HWP on every
+pilot case, so the measured tradeoff is not reported as a surviving new method.
+Joint synthesis, catalytic HWP, and measurement-assisted HWP remain unavailable
+or unverified under matching semantics.
 
 See [docs/semantics.md](docs/semantics.md),
 [docs/resource-model.md](docs/resource-model.md), and

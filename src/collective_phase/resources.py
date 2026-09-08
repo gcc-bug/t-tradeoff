@@ -26,6 +26,39 @@ class ResourceRecord:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class TradeoffRecord:
+    application_rotations: int
+    generic_application_rotations: int
+    exact_application_rotations: int
+    preparation_rotations: int
+    generic_preparation_rotations: int
+    exact_preparation_rotations: int
+    logical_toffoli_count: int
+    logical_cx_count: int
+    logical_x_count: int
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def characterize_tradeoff(lowered: LoweredCircuit) -> TradeoffRecord:
+    application = lowered.application_rotations
+    preparation = lowered.preparation_rotations
+    operations = lowered.candidate.operations
+    return TradeoffRecord(
+        application_rotations=len(application),
+        generic_application_rotations=sum(not item.exact for item in application),
+        exact_application_rotations=sum(item.exact for item in application),
+        preparation_rotations=len(preparation),
+        generic_preparation_rotations=sum(not item.exact for item in preparation),
+        exact_preparation_rotations=sum(item.exact for item in preparation),
+        logical_toffoli_count=sum(item.kind == "toffoli" for item in operations),
+        logical_cx_count=sum(item.kind == "cx" for item in operations),
+        logical_x_count=sum(item.kind == "x" for item in operations),
+    )
+
+
 def _schedule(events: list[GateEvent | MacroEvent]) -> tuple[int, int]:
     levels: dict[int, int] = {}
     t_count = 0
@@ -96,4 +129,3 @@ def estimate_resources(lowered: LoweredCircuit) -> ResourceRecord:
         amortized_t=t_count / reuse,
         accounting_status=lowered.candidate.accounting_status,
     )
-

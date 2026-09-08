@@ -9,9 +9,18 @@ The raw rule rewrites compatible predicates using
 weight has low bit zero and high bit `a OR b`. The dependency-simplified HWP
 compiler therefore emits exactly the raw rewrite.
 
+The tradeoff itself is real and independently visible before T lowering. In the
+pilot, the rule fires in 6 of 13 cases and matches 11 disjoint triples. Each
+triple removes two generic rotation requests and adds two logical Toffolis; the
+pilot also averages six added CNOTs per triple, though that Clifford exchange is
+support- and parity-network-dependent. Three clean ancillas are reused across
+triples in a circuit. T-count and T-depth then determine whether this exchange
+is attractive for a particular angle, precision, and gate model, but they are
+not the definition of the tradeoff.
+
 In the repaired development pilot, the two variants have the same emitted
-operation stream on all 13 cases. The selected candidate records no T-count
-advantage over this overlap baseline:
+operation stream on all 13 cases. As a secondary deployment-policy result, the
+T-count-selected candidate records no advantage over this overlap baseline:
 
 - Public: 0 wins and 3 ties against dependency-simplified HWP.
 - Synthetic diagnostics: 0 wins, 8 ties against simplified; 2 regressions
