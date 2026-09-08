@@ -931,6 +931,9 @@ def verify_result_rows(
                             "label": alternative["label"],
                             "eligible": False,
                             "resource_tuple": None,
+                            "operation_signature": _operation_signature(
+                                alternative_candidate
+                            ),
                         }
                     )
                     continue
@@ -990,6 +993,9 @@ def verify_result_rows(
                         "label": alternative["label"],
                         "eligible": eligible,
                         "resource_tuple": resource_tuple,
+                        "operation_signature": _operation_signature(
+                            alternative_candidate
+                        ),
                     }
                 )
             if replayed_alternatives and row.get("selected_from"):
@@ -1024,6 +1030,23 @@ def verify_result_rows(
                             f"{row_id}: selected alternative is not the "
                             f"{objective} optimum"
                         )
+                selected_artifact = next(
+                    (
+                        value
+                        for value in replayed_alternatives
+                        if value["label"] == row["selected_from"]
+                    ),
+                    None,
+                )
+                if (
+                    selected_artifact is None
+                    or selected_artifact["operation_signature"]
+                    != row.get("operation_signature")
+                ):
+                    failures.append(
+                        f"{row_id}: selected alternative does not match "
+                        "the stored candidate operation stream"
+                    )
             replayed_successes += 1
         except Exception as exc:
             failures.append(
