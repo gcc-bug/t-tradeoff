@@ -1,4 +1,10 @@
-from .lower import GateEvent, LoweredCircuit, MacroEvent, lower_candidate
+from .lower import (
+    GateEvent,
+    LoweredCircuit,
+    MacroEvent,
+    lower_candidate,
+    lower_candidate_with_rotations,
+)
 from .synthesis import RotationSynthesis, RotationSynthesizer
 
 __all__ = [
@@ -8,5 +14,5 @@ __all__ = [
     "RotationSynthesis",
     "RotationSynthesizer",
     "lower_candidate",
+    "lower_candidate_with_rotations",
 ]
-

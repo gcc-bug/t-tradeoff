@@ -14,6 +14,15 @@ class GateEvent:
     kind: str
     qubits: tuple[int, ...]
 
+    def to_dict(self) -> dict[str, Any]:
+        return {"event_type": "gate", "kind": self.kind, "qubits": list(self.qubits)}
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "GateEvent":
+        if value.get("event_type", "gate") != "gate":
+            raise ValueError("not a gate event")
+        return cls(value["kind"], tuple(int(qubit) for qubit in value["qubits"]))
+
 
 @dataclass(frozen=True)
 class MacroEvent:
@@ -26,6 +35,38 @@ class MacroEvent:
     clifford_count: int | None = None
     source: str = ""
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_type": "macro",
+            "kind": self.kind,
+            "qubits": list(self.qubits),
+            "t_count": self.t_count,
+            "t_depth": self.t_depth,
+            "measurement_count": self.measurement_count,
+            "adaptive_rounds": self.adaptive_rounds,
+            "clifford_count": self.clifford_count,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "MacroEvent":
+        if value.get("event_type", "macro") != "macro":
+            raise ValueError("not a macro event")
+        return cls(
+            kind=value["kind"],
+            qubits=tuple(int(qubit) for qubit in value["qubits"]),
+            t_count=int(value["t_count"]),
+            t_depth=int(value["t_depth"]),
+            measurement_count=int(value.get("measurement_count", 0)),
+            adaptive_rounds=int(value.get("adaptive_rounds", 0)),
+            clifford_count=(
+                None
+                if value.get("clifford_count") is None
+                else int(value["clifford_count"])
+            ),
+            source=value.get("source", ""),
+        )
+
 
 @dataclass
 class LoweredCircuit:
@@ -36,6 +77,52 @@ class LoweredCircuit:
     lowering_global_phase: float = 0.0
     error_bound: float = 0.0
     error_metric: str = "operator_norm_telescoping"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 2,
+            "events": [event.to_dict() for event in self.events],
+            "rotations": {
+                "application": [value.to_dict() for value in self.application_rotations],
+                "preparation": [value.to_dict() for value in self.preparation_rotations],
+            },
+            "lowering_global_phase": self.lowering_global_phase,
+            "total_global_phase": (
+                self.candidate.global_phase + self.lowering_global_phase
+            ),
+            "error_bound": self.error_bound,
+            "error_metric": self.error_metric,
+        }
+
+    @classmethod
+    def from_dict(
+        cls, value: dict[str, Any], candidate: Candidate
+    ) -> "LoweredCircuit":
+        events: list[GateEvent | MacroEvent] = []
+        for event in value.get("events", []):
+            event_type = event.get("event_type")
+            if event_type == "macro" or (
+                event_type is None and "t_count" in event
+            ):
+                events.append(MacroEvent.from_dict(event))
+            else:
+                events.append(GateEvent.from_dict(event))
+        rotations = value.get("rotations", {})
+        return cls(
+            candidate=candidate,
+            events=events,
+            preparation_rotations=[
+                RotationSynthesis.from_dict(item)
+                for item in rotations.get("preparation", [])
+            ],
+            application_rotations=[
+                RotationSynthesis.from_dict(item)
+                for item in rotations.get("application", [])
+            ],
+            lowering_global_phase=float(value.get("lowering_global_phase", 0.0)),
+            error_bound=float(value.get("error_bound", 0.0)),
+            error_metric=value.get("error_metric", "operator_norm_telescoping"),
+        )
 
 
 def _toffoli_events(qubits: tuple[int, ...]) -> list[GateEvent]:
@@ -116,16 +203,43 @@ def lower_candidate(
 ) -> LoweredCircuit:
     if candidate.status != "success":
         raise ValueError("cannot lower an unsuccessful candidate")
-    lowered = LoweredCircuit(candidate=candidate)
     application_angles, preparation_angles = _angle_requests(candidate)
     app_tolerance, prep_tolerance = _allocate_tolerances(
         candidate, application_angles, preparation_angles, total_error
     )
     app_results = [synthesizer.synthesize(angle, app_tolerance) for angle in application_angles]
     prep_results = [synthesizer.synthesize(angle, prep_tolerance) for angle in preparation_angles]
-    lowered.application_rotations = app_results
-    lowered.preparation_rotations = prep_results
-    app_iterator = iter(app_results)
+    return lower_candidate_with_rotations(
+        candidate, total_error, app_results, prep_results
+    )
+
+
+def lower_candidate_with_rotations(
+    candidate: Candidate,
+    total_error: float,
+    application_rotations: list[RotationSynthesis],
+    preparation_rotations: list[RotationSynthesis],
+) -> LoweredCircuit:
+    """Rebuild a gate stream from persisted rotation-synthesis evidence."""
+    if candidate.status != "success":
+        raise ValueError("cannot lower an unsuccessful candidate")
+    application_angles, preparation_angles = _angle_requests(candidate)
+    if len(application_angles) != len(application_rotations):
+        raise ValueError("application rotation count does not match candidate")
+    if len(preparation_angles) != len(preparation_rotations):
+        raise ValueError("preparation rotation count does not match candidate")
+    for angle, result in zip(application_angles, application_rotations, strict=True):
+        if result.angle_key != angle.cache_key:
+            raise ValueError("application rotation identity does not match candidate")
+    for angle, result in zip(preparation_angles, preparation_rotations, strict=True):
+        if result.angle_key != angle.cache_key:
+            raise ValueError("preparation rotation identity does not match candidate")
+    lowered = LoweredCircuit(
+        candidate=candidate,
+        application_rotations=list(application_rotations),
+        preparation_rotations=list(preparation_rotations),
+    )
+    app_iterator = iter(application_rotations)
 
     for operation in candidate.operations:
         kind = operation.kind
@@ -221,8 +335,8 @@ def lower_candidate(
         raise AssertionError("not all synthesized application rotations were consumed")
 
     reuse = int(candidate.parameters.get("reuse_count", 1))
-    prep_error = sum(result.actual_operator_error for result in prep_results)
-    app_error = sum(result.actual_operator_error for result in app_results)
+    prep_error = sum(result.actual_operator_error for result in preparation_rotations)
+    app_error = sum(result.actual_operator_error for result in application_rotations)
     lowered.error_bound = prep_error + reuse * app_error
     if lowered.error_bound > total_error * (1 + 1e-7):
         raise RuntimeError("composed synthesis error exceeds configured total budget")
