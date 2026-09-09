@@ -30,9 +30,9 @@ network described by Kivlichan et al. and reverses it for unitary cleanup. This
 adaptation is more expensive than the paper's measurement-assisted cleanup and
 is labeled accordingly.
 
-The ANF popcount, dependent-triple rewrite, legacy macro, and catalytic estimate
-remain available only as correctness, diagnostic, historical, or unverified
-methods. They do not enter the default ranking.
+The former ANF popcount, dependent-triple wrapper, legacy macro, and catalytic
+estimate are retained only in Git history and historical reports. They are not
+production methods or default competitors.
 
 ## Setup
 

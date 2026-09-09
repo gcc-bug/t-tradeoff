@@ -1,6 +1,7 @@
-schema_version: 1
+schema_version: 2
 run_id: smoke
 manifest: data/manifests/smoke.yaml
+analysis_focus: active_pipeline_smoke
 angles:
   - id: theta_pi_4
     value: pi/4
@@ -10,13 +11,18 @@ model_profiles: [unitary_clifford_t]
 methods:
   - independent
   - shared_parity
-  - hwp
-  - catalyzed_hwp
-  - dependent_triples
-  - joint_synthesis
+  - hwp_adder_unitary
+required_methods:
+  - independent
+  - shared_parity
+  - hwp_adder_unitary
+objective: t_count
+limits:
+  ancilla: 8
+  t_depth: null
+  t_count: null
 hwp_batch_policy: balanced
-catalyst_reuse_counts: [1, 10]
+hwp_search_cap: 4
 seed: 0
 results_dir: results/raw/smoke
 diagnosis_path: reports/diagnosis-smoke.md
-

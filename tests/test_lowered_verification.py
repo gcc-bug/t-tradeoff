@@ -3,10 +3,7 @@ import math
 
 import pytest
 
-from collective_phase.baselines import (
-    compile_hwp_macro_legacy,
-    compile_independent,
-)
+from collective_phase.baselines import compile_independent
 from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer, lower_candidate
@@ -96,20 +93,6 @@ def test_lowered_verifier_rejects_global_phase_and_nan_mutations():
     )
     nan_error = replace(lowered, error_bound=math.nan)
     assert verify_lowered_circuit(nan_error, 1e-4).status == "verification_failure"
-
-
-def test_macro_cannot_be_marked_as_emitted_evidence():
-    program = make_program(
-        "three", 2, [1, 2, 3], AngleBinding("theta", "pi/4")
-    )
-    candidate = compile_hwp_macro_legacy(
-        program, CompilationConstraints(8, "unitary_clifford_t")
-    )
-    candidate = replace(candidate, accounting_status="emitted")
-    lowered = lower_candidate(candidate, 1e-4, RotationSynthesizer())
-    result = verify_lowered_circuit(lowered, 1e-4)
-    assert result.status == "macro_not_verified"
-    assert result.macro_free is False
 
 
 def test_dense_preflight_uses_compositional_scope_without_allocating():

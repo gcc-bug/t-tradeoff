@@ -4,12 +4,11 @@ import math
 import numpy as np
 import pytest
 
-from collective_phase.baselines import compile_catalyzed_hwp, compile_hwp, compile_independent
+from collective_phase.baselines import compile_hwp_adder_unitary, compile_independent
 from collective_phase.baselines.common import CompilationConstraints
-from collective_phase.candidates import compile_dependent_triples
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer, lower_candidate
-from collective_phase.resources import characterize_tradeoff, estimate_resources
+from collective_phase.resources import estimate_resources
 
 
 def _apply_gate(state, event, total_qubits):
@@ -41,14 +40,14 @@ def _apply_gate(state, event, total_qubits):
     raise AssertionError(event.kind)
 
 
-def test_unitary_candidate_is_fully_emitted_and_matches_dense_target():
+def test_unitary_hwp_is_fully_emitted_and_matches_dense_target():
     program = make_program("triple", 2, [1, 2, 3], AngleBinding("theta", "pi/4"))
-    candidate = compile_dependent_triples(
-        program, CompilationConstraints(3, "unitary_clifford_t")
+    candidate = compile_hwp_adder_unitary(
+        program, CompilationConstraints(8, "unitary_clifford_t")
     )
     lowered = lower_candidate(candidate, 1e-4, RotationSynthesizer())
     assert all(isinstance(event, GateEvent) for event in lowered.events)
-    assert estimate_resources(lowered).t_count == 14
+    assert estimate_resources(lowered).t_count == 15
 
     total = program.qubit_count + candidate.workspace_qubits
     state = np.zeros(1 << total, complex)
@@ -65,34 +64,6 @@ def test_unitary_candidate_is_fully_emitted_and_matches_dense_target():
     # regression guard when generic synthesis is used elsewhere.
     expected *= cmath.exp(1j * (phase - candidate.global_phase))
     assert np.linalg.norm(state - expected) < 1e-10
-
-
-def test_measurement_hwp_uses_published_adder_count_and_is_labeled_estimate():
-    program = make_program("three", 2, [1, 2, 3], AngleBinding("theta", "pi/4"))
-    candidate = compile_hwp(
-        program, CompilationConstraints(8, "measurement_assisted_clifford_t")
-    )
-    resources = estimate_resources(
-        lower_candidate(candidate, 1e-4, RotationSynthesizer())
-    )
-    assert resources.accounting_status == "estimated_macro"
-    assert resources.measurement_count == 1  # M - popcount(M) for M=3
-    assert resources.t_count == 5  # 4 arithmetic T plus P(pi/4); P(pi/2) is Clifford
-
-
-def test_catalyst_preparation_and_reuse_are_separate():
-    program = make_program("three", 2, [1, 2, 3], AngleBinding("theta", "pi/4"))
-    candidate = compile_catalyzed_hwp(
-        program,
-        CompilationConstraints(8, "measurement_assisted_clifford_t", catalyst_reuse_count=10),
-    )
-    resources = estimate_resources(
-        lower_candidate(candidate, 1e-4, RotationSynthesizer())
-    )
-    assert resources.reuse_count == 10
-    assert resources.preparation_t > 0
-    assert resources.t_count == resources.preparation_t + 10 * resources.application_t
-    assert resources.t_depth == resources.preparation_depth + 10 * resources.application_depth
 
 
 def test_generic_pygridsynth_rotation_respects_operator_norm_budget(tmp_path):
@@ -124,31 +95,3 @@ def test_generic_lowering_retains_backend_global_phase_tokens(tmp_path):
     )
     expected = state * np.array([1, cmath.exp(1j * 0.173)])
     assert np.linalg.norm(actual - expected) <= 1e-4
-
-
-def test_raw_triple_exposes_rotation_for_arithmetic_tradeoff(tmp_path):
-    pytest.importorskip("pygridsynth")
-    program = make_program(
-        "triple", 2, [1, 2, 3], AngleBinding("theta", "0.173")
-    )
-    constraints = CompilationConstraints(3, "unitary_clifford_t")
-    synthesizer = RotationSynthesizer(tmp_path / "cache.json")
-    raw = characterize_tradeoff(
-        lower_candidate(
-            compile_dependent_triples(program, constraints),
-            1e-4,
-            synthesizer,
-        )
-    )
-    direct = characterize_tradeoff(
-        lower_candidate(
-            compile_independent(program, constraints),
-            1e-4,
-            synthesizer,
-        )
-    )
-
-    assert raw.generic_application_rotations == 1
-    assert direct.generic_application_rotations == 3
-    assert raw.logical_toffoli_count - direct.logical_toffoli_count == 2
-    assert raw.logical_cx_count - direct.logical_cx_count == 6

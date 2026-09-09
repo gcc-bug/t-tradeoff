@@ -26,5 +26,3 @@ hwp_search_cap: 8
 seed: 0
 results_dir: results/raw/default-study
 diagnosis_path: reports/default-study-diagnosis.md
-diagnostics:
-  dependent_triples: false

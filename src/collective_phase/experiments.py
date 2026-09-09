@@ -13,19 +13,11 @@ import time
 from typing import Any, Callable
 
 from .baselines import (
-    compile_catalyzed_hwp,
     compile_hwp_adder_unitary_alternatives,
-    compile_hwp_emitted_alternatives,
-    compile_hwp_emitted_triple_grouped,
-    compile_hwp_macro_legacy,
     compile_independent,
     compile_shared_parity,
 )
 from .baselines.common import CompilationConstraints
-from .candidates import (
-    compile_dependent_triples_raw,
-    compile_hwp_dependency_simplified,
-)
 from .circuit import Candidate
 from .inputs import acquire_manifest, load_cases, load_manifest
 from .ir import AngleBinding, PhaseProgram
@@ -67,56 +59,7 @@ METHOD_EVIDENCE: dict[str, dict[str, Any]] = {
         "reproduction_quality": "unitary_adaptation_emitted_and_verified",
         "default_eligible": True,
     },
-    "hwp_emitted": {
-        "level": "correctness_reference",
-        "reproduction_quality": "small_anf_reference",
-        "default_eligible": False,
-    },
-    "hwp_emitted_triple_grouped": {
-        "level": "diagnostic",
-        "reproduction_quality": "small_anf_reference",
-        "default_eligible": False,
-    },
-    "hwp_dependency_simplified": {
-        "level": "equivalence_demonstration",
-        "reproduction_quality": "emitted_and_verified",
-        "default_eligible": False,
-    },
-    "dependent_triples_raw": {
-        "level": "diagnostic",
-        "reproduction_quality": "emitted_and_verified",
-        "default_eligible": False,
-    },
-    "dependent_triples_selected": {
-        "level": "diagnostic_policy",
-        "reproduction_quality": "emitted_and_verified",
-        "default_eligible": False,
-    },
-    "hwp_macro_legacy": {
-        "level": "historical_estimate",
-        "reproduction_quality": "formula_macro_only",
-        "default_eligible": False,
-    },
-    "catalyzed_hwp_unverified": {
-        "level": "unverified_estimate",
-        "reproduction_quality": "formula_macro_only",
-        "default_eligible": False,
-    },
-    "joint_synthesis": {
-        "level": "unavailable",
-        "reproduction_quality": "not_integrated",
-        "default_eligible": False,
-    },
 }
-
-# Retained only by ``render_historical_tradeoff_report`` so old analyses can be
-# regenerated without making these name-based groups part of the default study.
-HISTORICAL_STRONG_BASELINES = (
-    "hwp_emitted",
-    "hwp_emitted_triple_grouped",
-    "hwp_dependency_simplified",
-)
-HISTORICAL_BASIC_BASELINES = ("independent", "shared_parity")
 
 
 def _method_evidence(method: str) -> dict[str, Any]:
@@ -137,18 +80,8 @@ Compiler = Callable[[PhaseProgram, CompilationConstraints], Candidate]
 COMPILERS: dict[str, Compiler] = {
     "independent": compile_independent,
     "shared_parity": compile_shared_parity,
-    "hwp_macro_legacy": compile_hwp_macro_legacy,
-    "hwp_emitted_triple_grouped": compile_hwp_emitted_triple_grouped,
-    "catalyzed_hwp_unverified": compile_catalyzed_hwp,
-    "hwp_dependency_simplified": compile_hwp_dependency_simplified,
-    "dependent_triples_raw": compile_dependent_triples_raw,
 }
-SPECIAL_METHODS = {
-    "hwp_adder_unitary",
-    "hwp_emitted",
-    "dependent_triples_selected",
-    "joint_synthesis",
-}
+SPECIAL_METHODS = {"hwp_adder_unitary"}
 
 
 @dataclass
@@ -369,24 +302,6 @@ def profile_cases(config: dict[str, Any]) -> list[dict[str, Any]]:
     return [value.to_dict() for value in profiles]
 
 
-def _joint_unavailable(program: PhaseProgram, model_profile: str) -> Candidate:
-    return Candidate(
-        method="joint_synthesis",
-        version="unavailable",
-        program=program,
-        status="unavailable",
-        model_profile=model_profile,
-        failure_reason=(
-            "No verified joint-synthesis implementation with matching diagonal-block "
-            "and operator-norm precision semantics is integrated"
-        ),
-        accounting_status="unavailable",
-        implementation_family="joint_synthesis",
-        variant="unavailable",
-        preprocessing_version=PREPROCESSING_VERSION,
-    )
-
-
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -431,29 +346,6 @@ def _execute_method(
             objective=constraints.objective,
             limits=limits,
         )
-    elif method == "hwp_emitted":
-        selection = select_lowered_candidate(
-            compile_hwp_emitted_alternatives(program, constraints),
-            total_error,
-            synthesizer,
-            selected_method="hwp_emitted",
-            objective=constraints.objective,
-            limits=limits,
-        )
-    elif method == "dependent_triples_selected":
-        selection = select_lowered_candidate(
-            [
-                compile_dependent_triples_raw(program, constraints),
-                compile_independent(program, constraints),
-                compile_shared_parity(program, constraints),
-            ],
-            total_error,
-            synthesizer,
-            selected_method="dependent_triples_selected",
-            objective=constraints.objective,
-            preferred_method="dependent_triples_raw",
-            limits=limits,
-        )
     if selection is not None:
         lowered_verification = verify_lowered_circuit(
             selection.lowered, total_error
@@ -469,10 +361,7 @@ def _execute_method(
             ],
         )
 
-    if method == "joint_synthesis":
-        candidate = _joint_unavailable(program, constraints.model_profile)
-    else:
-        candidate = COMPILERS[method](program, constraints)
+    candidate = COMPILERS[method](program, constraints)
     ideal = verify_candidate(candidate)
     executed = ExecutedCandidate(candidate, ideal)
     expected_ideal = (
@@ -568,16 +457,7 @@ def run_experiments(
                 for workspace in config["workspace_budgets"]:
                     for model_profile in config["model_profiles"]:
                         for method in config["methods"]:
-                            reuse_counts = (
-                                config.get("catalyst_reuse_counts", [1])
-                                if method
-                                in {
-                                    "catalyzed_hwp",
-                                    "catalyzed_hwp_unverified",
-                                }
-                                else [1]
-                            )
-                            for reuse in reuse_counts:
+                            for reuse in [1]:
                                 objective = config.get(
                                     "objective", "t_count"
                                 )
@@ -814,12 +694,6 @@ def required_run_failures(
             [
                 method
                 for method in config.get("methods", [])
-                if method
-                not in {
-                    "joint_synthesis",
-                    "hwp_macro_legacy",
-                    "catalyzed_hwp_unverified",
-                }
             ],
         )
     )
