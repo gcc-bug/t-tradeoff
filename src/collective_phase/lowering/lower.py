@@ -77,6 +77,8 @@ class LoweredCircuit:
     lowering_global_phase: float = 0.0
     error_bound: float = 0.0
     error_metric: str = "operator_norm_telescoping"
+    allocated_qubits: int | None = None
+    optimization: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,6 +94,8 @@ class LoweredCircuit:
             ),
             "error_bound": self.error_bound,
             "error_metric": self.error_metric,
+            "allocated_qubits": self.allocated_qubits,
+            "optimization": self.optimization,
         }
 
     @classmethod
@@ -122,6 +126,16 @@ class LoweredCircuit:
             lowering_global_phase=float(value.get("lowering_global_phase", 0.0)),
             error_bound=float(value.get("error_bound", 0.0)),
             error_metric=value.get("error_metric", "operator_norm_telescoping"),
+            allocated_qubits=(
+                None
+                if value.get("allocated_qubits") is None
+                else int(value["allocated_qubits"])
+            ),
+            optimization=(
+                None
+                if value.get("optimization") is None
+                else dict(value["optimization"])
+            ),
         )
 
 

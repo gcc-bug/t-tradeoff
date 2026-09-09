@@ -156,9 +156,12 @@ def _validate_rotations(lowered: LoweredCircuit, total_error: float) -> str | No
 
 
 def _validate_events(lowered: LoweredCircuit) -> str | None:
-    total_qubits = (
+    declared_qubits = (
         lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
     )
+    total_qubits = lowered.allocated_qubits or declared_qubits
+    if not lowered.candidate.program.qubit_count <= total_qubits <= declared_qubits:
+        return "allocated qubits must include data and fit the declared circuit"
     for event in lowered.events:
         if isinstance(event, MacroEvent):
             if any(
@@ -311,7 +314,9 @@ def _expected_emitted_stream(
 
 def _dense_isometry_error(lowered: LoweredCircuit) -> float:
     data_qubits = lowered.candidate.program.qubit_count
-    total_qubits = data_qubits + lowered.candidate.workspace_qubits
+    total_qubits = lowered.allocated_qubits or (
+        data_qubits + lowered.candidate.workspace_qubits
+    )
     data_size = 1 << data_qubits
     full_size = 1 << total_qubits
     difference = np.zeros((full_size, data_size), dtype=np.complex128)
@@ -407,6 +412,17 @@ def verify_lowered_circuit(
             True, 0, memory_cap_bytes,
             f"ideal construction evidence is insufficient: {ideal.status}",
         )
+    if lowered.optimization is not None:
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported",
+            "external_equivalence_pair_required",
+            None,
+            recomputed_bound,
+            True,
+            0,
+            memory_cap_bytes,
+            "externally optimized streams require source-to-result verification",
+        )
     expected_events, expected_phase, binding_error = _expected_emitted_stream(lowered)
     if binding_error is not None:
         return LoweredVerificationResult(
@@ -430,7 +446,9 @@ def verify_lowered_circuit(
         )
     data_size = 1 << lowered.candidate.program.qubit_count
     full_size = 1 << (
-        lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
+        lowered.allocated_qubits
+        or lowered.candidate.program.qubit_count
+        + lowered.candidate.workspace_qubits
     )
     matrix_bytes = full_size * data_size * np.dtype(np.complex128).itemsize
     allocation_estimate = 3 * matrix_bytes
@@ -461,4 +479,101 @@ def verify_lowered_circuit(
         matrix_bytes,
         memory_cap_bytes,
         "emitted stream and clean-input isometry verified",
+    )
+
+
+def verify_optimized_lowered_circuit(
+    source: LoweredCircuit,
+    result: LoweredCircuit,
+    total_error: float,
+    *,
+    memory_cap_bytes: int = 32 * 1024 * 1024,
+) -> LoweredVerificationResult:
+    """Verify an exact external rewrite against its already-bound source stream."""
+    source_verification = verify_lowered_circuit(
+        source, total_error, memory_cap_bytes=memory_cap_bytes
+    )
+    if not source_verification.status.startswith("verified_lowered_"):
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported",
+            "external_source",
+            None,
+            source.error_bound,
+            True,
+            0,
+            memory_cap_bytes,
+            f"external rewrite source is not verified: {source_verification.status}",
+        )
+    event_error = _validate_events(result)
+    if event_error:
+        return LoweredVerificationResult(
+            "verification_failure", "validation", None, result.error_bound,
+            False, 0, memory_cap_bytes, event_error
+        )
+    if result.candidate != source.candidate:
+        return LoweredVerificationResult(
+            "verification_failure", "external_boundary", None, result.error_bound,
+            True, 0, memory_cap_bytes, "external rewrite changed the symbolic target"
+        )
+    if result.error_bound != source.error_bound or result.error_metric != source.error_metric:
+        return LoweredVerificationResult(
+            "verification_failure", "external_error_contract", None, result.error_bound,
+            True, 0, memory_cap_bytes, "exact rewrite changed the synthesis-error contract"
+        )
+    if result.optimization is None:
+        return LoweredVerificationResult(
+            "verification_failure", "external_provenance", None, result.error_bound,
+            True, 0, memory_cap_bytes, "external rewrite lacks backend provenance"
+        )
+    try:
+        from ..adapters._pyzx_circuit import equivalence_phase, events_to_circuit
+
+        qubits = source.candidate.program.qubit_count + source.candidate.workspace_qubits
+        source_circuit = events_to_circuit(source.events, qubits)
+        result_circuit = events_to_circuit(result.events, qubits)
+        phase = equivalence_phase(source_circuit, result_circuit)
+    except Exception as exc:
+        return LoweredVerificationResult(
+            "verification_failure", "external_equivalence", None, result.error_bound,
+            True, 0, memory_cap_bytes, str(exc)
+        )
+    correction = result.lowering_global_phase - source.lowering_global_phase
+    if abs(cmath.exp(1j * correction) - cmath.exp(-1j * phase)) > 1e-9:
+        return LoweredVerificationResult(
+            "verification_failure", "external_global_phase", None, result.error_bound,
+            True, 0, memory_cap_bytes, "external global-phase correction is inconsistent"
+        )
+    data_size = 1 << result.candidate.program.qubit_count
+    full_size = 1 << (
+        result.allocated_qubits
+        or result.candidate.program.qubit_count + result.candidate.workspace_qubits
+    )
+    matrix_bytes = full_size * data_size * np.dtype(np.complex128).itemsize
+    if 3 * matrix_bytes <= memory_cap_bytes:
+        error = _dense_isometry_error(result)
+        if not math.isfinite(error) or error > total_error * (1 + 1e-7) + 1e-10:
+            return LoweredVerificationResult(
+                "verification_failure", "clean_input_isometry_spectral_norm", error,
+                result.error_bound, True, matrix_bytes, memory_cap_bytes,
+                "optimized clean-input isometry differs from the target",
+            )
+        return LoweredVerificationResult(
+            "verified_lowered_external_dense",
+            "external_equivalence_and_clean_input_isometry_spectral_norm",
+            error,
+            result.error_bound,
+            True,
+            matrix_bytes,
+            memory_cap_bytes,
+            "external rewrite equivalence and clean-input isometry verified",
+        )
+    return LoweredVerificationResult(
+        "verified_lowered_external_compositional",
+        "source_binding_external_equivalence_and_error_budget",
+        None,
+        result.error_bound,
+        True,
+        matrix_bytes,
+        memory_cap_bytes,
+        "external rewrite composed with verified source and synthesis error bound",
     )

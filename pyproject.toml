@@ -12,6 +12,7 @@ dependencies = [
   "PyYAML==6.0.2",
   "numpy>=1.24,<3",
   "pygridsynth==2.0.0",
+  "pyzx==0.9.0",
 ]
 
 [project.optional-dependencies]
@@ -26,4 +27,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-

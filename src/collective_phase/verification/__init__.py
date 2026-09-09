@@ -1,5 +1,9 @@
 from .core import VerificationResult, verify_candidate, verify_dense_action
-from .lowered import LoweredVerificationResult, verify_lowered_circuit
+from .lowered import (
+    LoweredVerificationResult,
+    verify_lowered_circuit,
+    verify_optimized_lowered_circuit,
+)
 
 __all__ = [
     "LoweredVerificationResult",
@@ -7,4 +11,5 @@ __all__ = [
     "verify_candidate",
     "verify_dense_action",
     "verify_lowered_circuit",
+    "verify_optimized_lowered_circuit",
 ]
