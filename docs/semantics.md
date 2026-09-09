@@ -33,9 +33,13 @@ explicit compositional scope based on deterministic gate replay, validated
 primitive decompositions, exact transformation certificates, and summed local
 synthesis error.
 
-Legacy HWP macros are reversible XOR embeddings of the binary Hamming
-weight, followed by exact bit-weighted phases and inverse cleanup.  This proves
-the compiler transformation, not the published macro's gate decomposition.
-Their verification status remains ideal-macro-only. The new `hwp_emitted`
-reference instead emits unitary ANF population-count arithmetic and must pass
-the independent lowered verifier before ranking.
+Legacy HWP macros are reversible XOR embeddings of the binary Hamming weight,
+followed by exact bit-weighted phases and inverse cleanup. This proves the
+compiler transformation, not the published macro's gate decomposition. Their
+verification status remains ideal-macro-only.
+
+The primary `hwp_adder_unitary` construction emits staged compressor arithmetic
+on materialized parity wires, phases the surviving binary-weight wires, and
+reverses arithmetic and parity preparation. The old `hwp_emitted` ANF path is
+retained only as a small correctness reference. Both emitted paths must pass
+clean-workspace and lowered-circuit verification.

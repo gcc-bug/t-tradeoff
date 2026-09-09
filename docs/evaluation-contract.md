@@ -1,62 +1,60 @@
 # Evaluation Contract
 
-## Common target
+## Common Target
 
-Every compared method receives the same serialized PhaseProgram, exact angle
-binding, block boundaries, canonical-v2 preprocessing, total operator-norm
+Every compared method receives the same serialized `PhaseProgram`, exact angle
+binding, block boundaries, `canonical-v2` preprocessing, total operator-norm
 synthesis budget, workspace budget, gate model, application count, and
 objective. Coefficients are exact integers and angle classes are joined by ID,
 never approximate numeric equality.
 
-The primary analysis characterizes the raw rotation-for-arithmetic exchange:
-generic and exact application-rotation requests, logical Toffolis, logical
-CNOTs, and peak clean workspace. T-count and scheduled logical T-depth are
-downstream outcome metrics under a declared synthesis and gate model. The
-schedule is a valid emitted dependency schedule, not an optimal-depth or
-minimum-workspace claim.
+## Evidence
 
-## Evidence levels
+Method metadata distinguishes a basic reference, correctness reference,
+audited prior construction, diagnostic, equivalence demonstration, historical
+estimate, unverified estimate, and unavailable method. Default eligibility is
+an explicit field of that metadata; verification alone does not establish
+competitive strength.
 
-| Evidence | Meaning | Primary ranking |
-| --- | --- | --- |
-| verified_lowered_dense | Macro-free gate stream passes clean-input isometry spectral-norm comparison | Eligible |
-| verified_lowered_compositional | Dense allocation exceeded the declared cap; deterministic replay, primitive validation, transformation certificate, and synthesis bound pass | Eligible with scope shown |
-| macro_not_verified | At least one arithmetic or measured channel remains a formula-level macro | Ineligible |
-| unavailable or failure | Matching implementation or evidence is absent | Ineligible |
+| Verification result | Default ranking consequence |
+| --- | --- |
+| `verified_lowered_dense` | Eligible when the method's evidence metadata allows it |
+| `verified_lowered_compositional` | Eligible with scope shown; ideal semantics, primitive matrices, exact event binding, phase, and error allocation all passed |
+| `lowered_evidence_unsupported` | Ineligible; a required proof connection was absent |
+| `macro_not_verified` | Ineligible; a formula-level or measured macro remains |
+| failure or unavailable | Ineligible |
 
-An emitted method cannot contain a MacroEvent. Hash integrity alone never
-qualifies evidence. A schema-v2 replay reconstructs the program, compiler
-candidate, rotations, gate stream, error bound, and resource record.
+Schema-v2 replay reconstructs the target, candidate, rotations, emitted stream,
+error bound, tradeoff decomposition, resources, evidence metadata, limits, and
+selection artifacts. Hash integrity alone does not qualify evidence.
 
-## Selection
+## Generation And Selection
 
-HWP batch limits from one through the configured search cap are compiled and
-fully lowered under the same whole-circuit error budget. The selected triple
-method similarly compares the raw rewrite, independent synthesis, and
-shared-parity synthesis. T-count selection uses T-count, then T-depth, peak
-workspace, and a stable label as tie-breaks. T-depth reverses the first two
-criteria. Pareto mode accepts the preferred rewrite only when it dominates or
-ties all eligible alternatives; otherwise it falls back.
+Direct and shared-parity candidates are generated once. Ordinary HWP generates
+documented batch limits from one through the configured cap and reevaluates
+each full circuit with its actual rotation count under the same total error.
 
-All alternatives, failures, resource tuples, and the nondominated set are
-stored. This selection is a secondary deployment policy. The main analysis
-always reports the raw candidate against normalized independent synthesis, so
-fallback cannot erase an unfavorable or otherwise interesting tradeoff.
-Estimated macros cannot enter an emitted selection pool.
+The selector retains every eligible nondominated `(T, T-depth, ancilla)` point.
+Hard T-count, T-depth, and ancilla limits are applied without relaxation. If no
+candidate passes them, the result is `no feasible alternative`. The supported
+objectives and tie-breaks are:
 
-## Pairing and strata
+| Objective | Tie-break |
+| --- | --- |
+| `t_count` | T-depth, ancillas, stable ID |
+| `t_depth` | T-count, ancillas, stable ID |
+| `ancilla` | T-count, T-depth, stable ID |
 
-A comparison key includes target and input hashes, semantic and preprocessing
-profiles, exact angle expression, error budget and metric, reuse count,
-workspace, gate model, code revision, configuration hash, objective, and
-benchmark stratum. Duplicate method rows for one key are rejected.
+Weighted sums and compilation time are not optimization objectives.
 
-Public, synthetic-diagnostic, and negative-control populations are reported
-separately. Each named baseline gets its own win, tie, regression, and matched
-denominator counts. Zero-T baselines are counted explicitly. A best-strong
-comparison is reported only when at least one eligible strong baseline exists.
+## Reporting
 
-The emitted ANF HWP is a correctness reference, not a competitive reproduction
-of published in-place or measurement-assisted HWP. Catalytic, measured, and
-joint-synthesis methods remain outside primary claims until their channels and
-matching resource assumptions are implemented and verified.
+Rows report method and variant, generic rotations, arithmetic T, rotation T,
+total T, scheduled T-depth, peak ancillas, synthesis error, verification scope,
+and evidence provenance. Scheduling uses the emitted dependency stream; stage
+depths are not added separately.
+
+The default study separates explanatory, negative-control, and public
+development inputs. The QED-C cases are not held-out evidence. ANF,
+dependent-triple, legacy, measured, catalytic, and unavailable methods do not
+enter the default comparison.

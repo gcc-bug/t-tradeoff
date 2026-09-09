@@ -11,11 +11,16 @@ Temporary logical AND computation is charged 4 T and its measurement-assisted
 uncompute is charged zero T plus one measurement/adaptive dependency.  Unknown
 macro Clifford counts are reported as `null`, not zero.
 
-`hwp_emitted` uses an out-of-place ANF population-count reference. Its
-multi-controlled operations and Toffolis are explicitly emitted, so counts and
-depth come from the gate stream. `hwp_macro_legacy` retains the older formula
-interpretation under an explicit, unranked label. The emitted circuit does not
-reproduce the cited in-place or measurement-assisted construction.
+`hwp_adder_unitary` is the primary ordinary-HWP path. For a batch of size `n`,
+it materializes `n` parity inputs and uses `n - popcount(n)` clean carry wires.
+Forward and reverse arithmetic each contain `n - popcount(n)` Toffolis, all
+lowered by the shared exact 7-T decomposition. This unitary cleanup deliberately
+does not claim the lower cost of measurement-assisted uncomputation.
+
+`hwp_emitted` is the old out-of-place ANF population-count correctness
+reference. It is capped at eight inputs and excluded from default rankings.
+`hwp_macro_legacy` retains the older formula interpretation under an explicit,
+unranked label.
 
 Catalyzed HWP estimates add the Kan-Symons generalized phase-gradient Toffoli count,
 one residual synthesized rotation per nontrivial batch, catalyst registers,

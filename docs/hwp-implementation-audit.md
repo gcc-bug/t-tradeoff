@@ -1,55 +1,71 @@
 # HWP Implementation Audit
 
-## Implemented emitted reference
+Audit date: 2026-09-09.
 
-The hwp_emitted variant materializes each parity predicate, computes binary
-population count into a separate clean output register, phases output bit j by
-2^j times the compatible group angle and coefficient, and reverses arithmetic
-and parity preparation.
+## Sources
 
-Output bit j is emitted as the XOR of all input monomials of degree 2^j. This
-is the elementary-symmetric-polynomial characterization of binary Hamming
-weight over GF(2), following Lucas' theorem. Multi-controlled X gates are
-decomposed into explicit Toffolis using clean scratch, and every Toffoli is
-then lowered into the shared exact 7-T unitary decomposition. Tests exhaust
-all input values for batch sizes one through eight and check computation,
-scratch restoration, and inversion.
+The primary source is Kivlichan et al., *Improved Fault-Tolerant Quantum
+Simulation of Condensed-Phase Correlated Electrons via Trotterization*,
+arXiv:1902.10673v4 (the CC BY 4.0 revision), Appendix A.1, "Combining
+arbitrary parallelizable rotations by Hamming weight phasing." The relevant
+passages define weight-bit phasing, the staged three-input and two-input
+adders, the `n - 1` worst-case bound, and measurement-assisted uncomputation.
 
-For batch size m, this reference uses:
+The primitive cleanup assumptions were cross-checked against Gidney, *Halving
+the cost of quantum addition*, arXiv:1709.06648v3, Figures 2 and 3 and the
+Hamming-weight example: a temporary logical AND costs four T gates to compute
+and zero T gates plus measurement/feedforward to erase.
 
-    m parity qubits
-    + m.bit_length() weight-output qubits
-    + max(0, 2^floor(log2(m)) - 2) clean monomial scratch qubits
+The maintained implementation consulted was Qualtran
+`qualtran.bloqs.arithmetic.hamming_weight.HammingWeightCompute` at Git revision
+`d5faa99db850001d440d0cc4e05b7b20b249a652` (2026-09-04), Apache-2.0. It uses
+the same staged 3-to-2 compressor and reports `n - popcount(n)` ANDs. No
+Qualtran code is vendored or imported; its implementation was used to audit
+the local gate ordering and exact count.
 
-This is an implementation upper bound. It is not an ancilla lower bound.
+## Local Mapping
 
-## Prior construction comparison
+| Source primitive | Local implementation | Emitted action |
+| --- | --- | --- |
+| Three equal-weight inputs plus clean carry | `append_three_to_two_compressor` | five CNOTs and one Toffoli; two inputs retained as garbage, third becomes sum, carry becomes next weight |
+| Even final pair plus clean carry | `append_two_to_two_adder` | one Toffoli and one CNOT; second input becomes sum |
+| Repeated weight stages | `hamming_weight_compute` | triples are reduced at each weight, an odd survivor becomes the output bit, and carries feed the next stage |
+| Weight-bit rotations | `_emit_adder_batch` | `P(2^j theta)` on each surviving weight-`2^j` bit |
+| Cleanup | `_emit_adder_batch` | reverse every arithmetic operation, then reverse parity preparation |
 
-The ordinary-HWP source tracked for this repository is Kivlichan et al.,
-arXiv:1902.10673v4, Section 2.1 and Appendix A. Its adders, in-place layout,
-and measurement-assisted cleanup do not match this ANF reference. Therefore
-its published formulas are not used to assign counts or depth to the emitted
-circuit. The older formula implementation is retained under the explicit
-hwp_macro_legacy method and excluded from primary ranking.
+The local construction materializes every parity predicate first because this
+repository starts from parity functions, while the paper starts from qubits on
+which equal rotations are already available. For a batch of size `n > 1`, the
+local peak workspace is therefore
 
-The catalytic source tracked is Kan-Symons, arXiv:2411.02160v2. Its phase
-gradient, catalyst lifecycle, and measured cleanup are not emitted here.
-Catalytic counts remain unverified estimates and are absent from the repaired
-unitary pilot.
+```text
+n parity qubits + (n - popcount(n)) clean carry qubits.
+```
 
-The implemented reference is expected to be weaker than a production in-place
-or measurement-assisted HWP construction. It is sufficient for validating
-semantics and testing the structural overlap, but not for claiming superiority
-over the strongest published ordinary-HWP baseline.
+The forward arithmetic contains exactly `n - popcount(n)` Toffolis. The
+unitary cleanup contains the same number, so the actual emitted candidate has
+`2 * (n - popcount(n))` logical Toffolis before the shared exact 7-T lowering.
+This is not the measured construction's T count. The paper and Qualtran can
+use temporary-AND measurement cleanup; the default unitary profile cannot.
 
-## Structural ablation
+Every batch trace records parity wires, surviving output-weight wires, retained
+garbage, carry wires, stage widths, forward and cleanup Toffolis, rotations,
+and the source. Tests exhaust primitive truth tables and full population-count
+computation/inversion for sizes 1-8, including non-powers of two.
 
-The generic triple-grouped variant applies this arithmetic to the exact
-disjoint triples chosen by the raw candidate. The dependency-simplified
-variant observes that the triple weight has truth table [0, 2, 2, 2], so its
-low bit is constant and its only nonconstant bit is a OR b.
+## ANF Reference
 
-That simplification emits exactly the raw candidate circuit. This establishes
-that the present triple identity is subsumed by simplified Hamming-weight
-phasing. It does not establish novelty, optimality, or a broader compiler
-advantage.
+`population_count_compute` is now explicitly a small correctness reference,
+capped at eight inputs. It enumerates elementary-symmetric monomials and is not
+ordinary HWP arithmetic. Its observed forward Toffoli counts of 3 at size 3
+and 391 at size 8 remain code observations, not bounds. It is excluded from the
+default configuration and evidence ranking.
+
+## Scope Limits
+
+This audit establishes a credible unitary adaptation of ordinary staged-adder
+HWP and derives resources from its emitted circuit. It does not reproduce the
+measurement-assisted cleanup cost, prove minimum depth or workspace, or cover
+the square-root-workspace scheme in Appendix A.2. Parity CNOT optimization is
+also independent of the HWP arithmetic and remains represented only by the
+basic shared-parity reference.

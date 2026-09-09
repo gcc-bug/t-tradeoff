@@ -1,99 +1,52 @@
 # Methodology Overview
 
-## Current algorithm and its tradeoff
+The current milestone compares constructions, not candidate identities. Every
+method receives one canonical `PhaseProgram`, exact angle binding, total
+operator-norm error budget, workspace limit, and gate model.
 
-The compiler targets diagonal parity phases:
+## Construct
 
-    U|x> = exp(i sum_j theta_j c_j p_j(x)) |x>
-    p_j(x) = parity(a_j & x) XOR b_j
+`preprocess` normalizes affine predicates, exact duplicates, coefficients, and
+block-local angle groups once. `independent` is the direct rotation reference;
+`shared_parity` changes only the parity network; `hwp_adder_unitary` exchanges
+equal-angle rotations for an emitted staged compressor network. HWP batch
+limits from one to the configured cap are generated before objective selection.
 
-All methods first use the same block-local preprocessing. Constants become a
-global phase, affine complements are normalized, exact duplicates are merged,
-cancellations are removed, and terms are grouped only when block, angle ID,
-and integer coefficient match.
+The old ANF popcount is a small correctness reference. The dependent-triple
+methods demonstrate one special identity and its HWP equivalence. Legacy and
+catalytic macros are formula evidence. None is a default competitor.
 
-The raw candidate looks for a compatible mask triple A, B, and A XOR B. If
-their Boolean values are a, b, and a XOR b, then:
+## Check And Count
 
-    a + b + (a XOR b) = 2(a OR b)
+Ideal construction verification checks the phase on every basis state up to
+the declared limit and requires data and clean workspace restoration. Lowered
+verification independently checks rotation matrices, a hard-coded Toffoli
+decomposition matrix, deterministic event-to-operation binding, global phase,
+and the exact allocation of local errors into the circuit budget. If those
+obligations are absent, a memory cap produces an unsupported result rather than
+a successful compositional certificate.
 
-It computes a and b into two clean qubits, computes a OR b into a third,
-applies one phase with angle 2 theta c, and uncomputes everything. The
-tradeoff per matched triple is two fewer arbitrary rotations in exchange for
-two Toffolis, support-dependent Clifford work, and three reusable clean work
-qubits. The current pilot observes six additional CNOTs per matched triple.
-The raw compiler is the research object and keeps the rewrite even when a
-downstream metric loses. The selected compiler is a separate deployment
-policy: it lowers the raw, independent, and shared-parity alternatives under
-the same total error budget and chooses by the declared objective.
+Resource accounting schedules dependencies in the actual emitted event stream.
+The report separates arithmetic T from rotation T, and reports total T,
+scheduled T-depth, peak extra qubits, error bound, and verification scope.
 
-Ordinary Hamming-weight phasing is evaluated in three explicit forms:
+## Compare
 
-- hwp_emitted computes binary weight with an emitted, out-of-place ANF
-  reference circuit and searches legal batch caps using full lowering.
-- hwp_emitted_triple_grouped applies that generic arithmetic to exactly the
-  raw candidate's triple groups, isolating the grouping effect.
-- hwp_dependency_simplified simplifies the same triple's weight bits. Its
-  low bit is constant zero and its high bit is a OR b.
+Only emitted, ideal-verified, and lowered-verified alternatives carrying
+explicit evidence metadata enter the default comparison. The selector retains
+all nondominated `(T, T-depth, ancilla)` points, applies hard limits without
+relaxation, and uses these policies:
 
-The last form emits the same circuit as the raw triple rewrite. The repaired
-pilot confirms identical operation streams on all 13 cases. Therefore the
-current rule is an HWP specialization, not a surviving new mechanism. It is
-retained as a regression and teaching case.
+| Objective | Primary metric | Tie-break |
+| --- | --- | --- |
+| `t_count` | T-count | T-depth, ancillas, stable ID |
+| `t_depth` | scheduled T-depth | T-count, ancillas, stable ID |
+| `ancilla` | peak extra qubits | T-count, T-depth, stable ID |
 
-## Evaluation pipeline
+Changing the objective selects among generated circuits; it does not create a
+new circuit. Weighted sums are intentionally absent.
 
-    frozen manifest
-      -> checksum-checked acquisition or deterministic generation
-      -> canonical parity-phase IR
-      -> shared preprocessing and structural profile
-      -> explicit compiler variants
-      -> ideal semantic verification
-      -> raw rotation/arithmetic/workspace characterization
-      -> common Clifford+T lowering and rotation synthesis
-      -> independent emitted-gate verification
-      -> dependency scheduling and resource accounting
-      -> artifact replay and matched, stratified reporting
-
-Each method receives the same target, exact angle binding, total operator-norm
-synthesis budget, workspace limit, gate model, reuse count, and objective.
-Generic rotations use pygridsynth 2.0.0; exact multiples of pi/4 use exact
-Clifford+T gates.
-
-For small emitted circuits, the independent verifier constructs the complete
-clean-input isometry and compares it with the target using spectral norm. It
-uses its own one- and two-qubit matrices rather than the ideal-operation
-interpreter. A memory preflight prevents accidental exponential allocation.
-Larger circuits receive explicitly labeled compositional evidence: validated
-primitive streams, replayed lowering, exact transformation certificates, and
-the sum of independently recomputed rotation errors. Macro events never count
-as emitted verification.
-
-Every successful schema-v2 row stores the program, candidate, rotation counts,
-logical arithmetic and CNOT counts, lowered events, global phase, verification
-evidence, resource record, and all selection alternatives. Verification
-reconstructs these objects and recomputes the target identity, ideal semantics,
-tradeoff signature, lowering, synthesis bound, gate-level evidence, and
-resources. Hashes detect accidental changes; replay detects semantically
-invalid changes even if a hash is updated.
-
-## Benchmarks and reporting
-
-The repaired development pilot keeps the previously frozen 13 cases and
-setting: one generic angle (0.173), total operator-norm budget 1e-4, eight
-work qubits, and the unitary Clifford+T model.
-
-| Stratum | Cases | Role |
-| --- | ---: | --- |
-| Public | 3 checksum-pinned QED-C MaxCut instances | Limited public development evidence |
-| Synthetic diagnostic | 8 predeclared graph and parity cases | Mechanism and failure-regime diagnosis |
-| Negative control | 2 weighted or irregular cases | Confirm no manufactured applicability |
-
-The report leads with the raw candidate's changes in generic rotations,
-Toffolis, CNOTs, and workspace against normalized independent synthesis.
-T-count, scheduled logical T-depth, error bound, and verification scope remain
-visible as consequences of that exchange. Objective-selected wins, ties, and
-regressions are a secondary deployment-policy analysis. Legacy macro estimates
-cannot enter primary evidence. The emitted HWP implementation is a correctness
-reference, not yet a competitive reproduction of published in-place or
-measurement-assisted HWP.
+The default fixed study is defined by `configs/default-study.yaml` and
+`data/manifests/refocus-study.yaml`. Its three QED-C graphs are public
+development inputs, not held-out evidence. See `reports/default-study.md` for
+the result and `docs/review-guide.md` for the shortest code-reading path.

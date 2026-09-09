@@ -2,6 +2,10 @@
 
 Date: 2026-09-07
 
+> Historical milestone record. The 2026-09-09 refocus supersedes the method
+> prioritization and ranking status below. See `docs/progress.md` and
+> `docs/evaluation-contract.md` for the current workflow.
+
 ## M0 scope
 
 - Publication mode is treated as `undecided`, with double-blind safeguards.
@@ -78,4 +82,3 @@ errors are explicit.  For `R` uses, the prototype charges catalyst preparation
 error once and application synthesis error `R` times under a conservative
 operator-norm telescoping bound.  It reports preparation depth, application
 depth, and composed depth; it never amortizes depth.
-

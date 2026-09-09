@@ -1,73 +1,85 @@
-# Collective Phase
+# Collective Phase Workbench
 
-This repository is a research prototype for compiling equal-angle commuting
-parity phases into Clifford+T resource models.  Its semantic target is
+This repository compares established constructions for one canonical
+parity-phase target:
 
 ```text
 U(theta)|x> = exp(i theta sum_j p_j(x)) |x>,
 p_j(x) = a_j . x XOR b_j.
 ```
 
-The prototype preserves exact angle-class identities and term multiplicity.
-It currently supports diagonal parity blocks only; controlled application and
-general commuting-Pauli diagonalization are deliberately unsupported.
+Exact angle identities, term multiplicity, block boundaries, and little-endian
+mask semantics are preserved by one shared normalization pass. The supported
+target is a diagonal parity block; controlled application and general
+commuting-Pauli diagonalization are outside the current contract.
 
-For a short explanation of the current rotation-for-arithmetic tradeoff,
-benchmarks, and evaluation flow, see
-[docs/methodology-overview.md](docs/methodology-overview.md).
+## Workflow
+
+The reviewable workflow has three layers:
+
+1. **Construct:** normalize a `PhaseProgram`, then emit named alternatives.
+2. **Check and count:** verify ideal semantics and emitted decompositions, lower
+   rotations with the pinned backend, schedule the event stream, and count
+   `(T, T_depth, peak ancillas)`.
+3. **Compare:** retain the Pareto set and select a verified alternative using
+   an explicit objective and hard limits.
+
+The default comparison contains `independent`, `shared_parity`, and
+`hwp_adder_unitary`. The HWP construction emits the staged adder/compressor
+network described by Kivlichan et al. and reverses it for unitary cleanup. This
+adaptation is more expensive than the paper's measurement-assisted cleanup and
+is labeled accordingly.
+
+The ANF popcount, dependent-triple rewrite, legacy macro, and catalytic estimate
+remain available only as correctness, diagnostic, historical, or unverified
+methods. They do not enter the default ranking.
 
 ## Setup
 
-Python 3.10 or newer is required.  A clean environment is recommended:
+Python 3.10 or newer is required:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -e '.[test]'
-pytest
+python -m pytest
 ```
 
-`pygridsynth==2.0.0` supplies Ross-Selinger-style ancilla-free synthesis of
-generic `Rz` rotations.  Exact multiples of `pi/4` bypass approximate
-synthesis.  The compiler records the global phase introduced by translating
-`P(theta) = diag(1, exp(i theta))` to `Rz(theta)`.
+`pygridsynth==2.0.0` supplies ancilla-free approximation of generic `Rz`
+rotations. Exact multiples of `pi/4` bypass approximate synthesis. All methods
+receive the same total operator-norm error budget, and each full-circuit
+alternative is lowered with its actual rotation count.
 
-## Tradeoff evaluation
-
-The current development pilot contains three checksum-pinned QED-C MaxCut
-instances plus separately labeled diagnostics and negative controls. Its
-primary output is the raw rotation-for-arithmetic tradeoff; T-count selection
-is reported only as a secondary deployment policy:
+## Default Study
 
 ```bash
-python -m collective_phase audit --config configs/tradeoff-pilot.yaml
-python -m collective_phase acquire --config configs/tradeoff-pilot.yaml
-python -m collective_phase profile --config configs/tradeoff-pilot.yaml
-python -m collective_phase run --config configs/tradeoff-pilot.yaml
-python -m collective_phase verify --results results/raw/tradeoff-pilot
-python -m collective_phase report --results results/raw/tradeoff-pilot \
-  --output reports/m2-reliable-evaluation.md
+python -m collective_phase audit --config configs/default-study.yaml
+python -m collective_phase acquire --config configs/default-study.yaml
+python -m collective_phase run --config configs/default-study.yaml
+python -m collective_phase verify --results results/raw/default-study
+python -m collective_phase report --results results/raw/default-study \
+  --output reports/default-study.md
 ```
 
-Raw input downloads and generated result rows are ignored.  Their manifests,
-checksums, configuration hashes, and exact acquisition URLs are tracked.
+The fixed workload has four explanatory or negative-control cases and three
+previously used checksum-pinned QED-C graphs. Those public graphs are development
+data, not held-out evidence. The configuration declares a generic angle,
+`1e-4` total error, eight workspace qubits, a T-count objective, and explicit
+hard limits.
 
-## Interpretation
+Start review with [docs/review-guide.md](docs/review-guide.md). The precise
+semantic and accounting contracts are in [docs/semantics.md](docs/semantics.md)
+and [docs/resource-model.md](docs/resource-model.md). Source mapping and known
+limits are in [docs/hwp-implementation-audit.md](docs/hwp-implementation-audit.md)
+and [docs/prior-work-matrix.md](docs/prior-work-matrix.md).
 
-The repaired runner uses explicit method identities. Emitted methods include
-`independent`, `shared_parity`, `hwp_emitted`,
-`hwp_emitted_triple_grouped`, `hwp_dependency_simplified`,
-`dependent_triples_raw`, and `dependent_triples_selected`.
-`hwp_macro_legacy` is shown only as historical formula evidence.
+## Interpretation Limits
 
-The evaluator first compares `dependent_triples_raw` with `independent` using
-generic-rotation, logical-Toffoli, CNOT, and clean-workspace counts. It then
-shows T-count and T-depth outcomes under the configured lowering. The current
-triple rewrite is exactly reproduced by dependency-simplified HWP on every
-pilot case, so the measured tradeoff is not reported as a surviving new method.
-Joint synthesis, catalytic HWP, and measurement-assisted HWP remain unavailable
-or unverified under matching semantics.
+Selecting the least costly existing circuit is infrastructure, not a novelty
+claim. The current study is unitary-only. Measurement-assisted and catalytic
+performance comparisons remain unsupported until their operations are emitted,
+verified as channels under their actual resource-state assumptions, and charged
+over matching repeated-use workloads.
 
-See [docs/semantics.md](docs/semantics.md),
-[docs/resource-model.md](docs/resource-model.md), and
-[docs/progress.md](docs/progress.md) before drawing research conclusions.
+Historical reports are indexed in [reports/README.md](reports/README.md); their
+recorded numbers are preserved rather than retroactively revised.
