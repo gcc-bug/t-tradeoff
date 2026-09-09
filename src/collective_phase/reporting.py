@@ -176,6 +176,10 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
         "",
         f"Results: `{results_path}`",
         "",
+        f"Code revision: `{rows[0].get('code_revision', 'unknown') if rows else 'unknown'}`. "
+        f"Config hash: `{rows[0].get('config_hash', 'unknown') if rows else 'unknown'}`. "
+        f"Manifest hash: `{rows[0].get('manifest_hash', 'unknown') if rows else 'unknown'}`.",
+        "",
         f"Fixed final objective: `{json.dumps(objective, sort_keys=True)}`. "
         f"Hard limits: `{json.dumps(limits, sort_keys=True)}`.",
         "",

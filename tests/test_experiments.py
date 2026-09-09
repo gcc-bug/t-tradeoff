@@ -115,6 +115,7 @@ def test_report_contains_policy_table_trace_and_pareto(study):
     assert "adaptive" in report
     assert "ncf" in report
     assert "trasyn" in report
+    assert f"Code revision: `{rows[0]['code_revision']}`" in report
 
 
 def test_report_rejects_mixed_study_identities(study):
