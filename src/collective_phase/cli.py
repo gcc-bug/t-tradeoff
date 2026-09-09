@@ -32,7 +32,11 @@ def _parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument("--config", required=True, help="YAML experiment configuration")
         if name == "run":
-            command.add_argument("--force", action="store_true", help="replace matching checkpoints")
+            command.add_argument(
+                "--force",
+                action="store_true",
+                help="rebuild JSON checkpoints in the configured results directory",
+            )
     verify = subparsers.add_parser("verify", help="validate stored result and circuit artifacts")
     verify.add_argument("--results", required=True, help="directory containing result JSON rows")
     report = subparsers.add_parser("report", help="write a concise Markdown result summary")

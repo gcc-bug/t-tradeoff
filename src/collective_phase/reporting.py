@@ -1,341 +1,310 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import json
 from pathlib import Path
 from typing import Any
 
 
-def _eligible(row: dict[str, Any]) -> bool:
-    return bool(
-        row.get("status") == "success"
-        and row.get("primary_eligible")
-        and str(row.get("lowered_verification_status", "")).startswith(
-            "verified_lowered_"
+def _identity(row: dict[str, Any]) -> tuple[str, ...]:
+    return (
+        str(row.get("code_revision")),
+        str(row.get("config_hash")),
+        str(row.get("manifest_hash")),
+        json.dumps(row.get("objective"), sort_keys=True),
+        json.dumps(row.get("limits"), sort_keys=True),
+    )
+
+
+def _case_key(row: dict[str, Any]) -> tuple:
+    return (
+        row.get("target_hash"),
+        row.get("angle_id"),
+        row.get("error_budget"),
+        row.get("workspace_budget"),
+        row.get("model_profile"),
+    )
+
+
+def _row_order(row: dict[str, Any]) -> tuple:
+    return (
+        row.get("case_id", ""),
+        row.get("workspace_budget", -1),
+        row.get("policy", ""),
+    )
+
+
+def _resources(row: dict[str, Any]) -> str:
+    if row.get("status") != "success":
+        return "n/a"
+    return f"({row['t_count']}, {row['t_depth']}, {row['peak_workspace']})"
+
+
+def _cell(value: Any) -> str:
+    return str(value).replace("|", "\\|")
+
+
+def _backend_summary(rows: list[dict[str, Any]]) -> list[str]:
+    observed: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        for name, value in row.get("backend_status", {}).items():
+            observed[name] = value
+    lines = [
+        "| Backend | Revision | Status | Detail |",
+        "| --- | --- | --- | --- |",
+    ]
+    for name, value in sorted(observed.items()):
+        detail = value.get("reason") or ", ".join(value.get("actions", [])) or "exact API"
+        lines.append(
+            f"| {name} | {value.get('revision', 'n/a')} | "
+            f"{value.get('status', 'unknown')} | {detail} |"
         )
-    )
+    if not observed:
+        lines.append("| none | n/a | unavailable | no backend status recorded |")
+    return lines
 
 
-def _dominates(first: dict[str, Any], second: dict[str, Any]) -> bool:
-    first_cost = (
-        int(first["t_count"]),
-        int(first["t_depth"]),
-        int(first["peak_workspace"]),
-    )
-    second_cost = (
-        int(second["t_count"]),
-        int(second["t_depth"]),
-        int(second["peak_workspace"]),
-    )
-    return all(a <= b for a, b in zip(first_cost, second_cost, strict=True)) and any(
-        a < b for a, b in zip(first_cost, second_cost, strict=True)
-    )
-
-
-def _rank(row: dict[str, Any], objective: str) -> tuple:
-    stable_id = (row["method"], row.get("variant") or "")
-    if objective == "t_depth":
-        return (
-            int(row["t_depth"]),
-            int(row["t_count"]),
-            int(row["peak_workspace"]),
-            stable_id,
+def _comparison_counts(
+    groups: dict[tuple, list[dict[str, Any]]], comparator_policies: set[str]
+) -> tuple[int, int, int, int]:
+    wins = ties = regressions = denominator = 0
+    for rows in groups.values():
+        adaptive = next(
+            (row for row in rows if row["policy"] == "adaptive_lookahead" and row["status"] == "success"),
+            None,
         )
-    if objective == "ancilla":
+        comparators = [
+            row
+            for row in rows
+            if row["policy"] in comparator_policies and row["status"] == "success"
+        ]
+        if adaptive is None or not comparators:
+            continue
+        denominator += 1
+        reference = min(float(row["objective_value"]) for row in comparators)
+        actual = float(adaptive["objective_value"])
+        if actual < reference - 1e-12:
+            wins += 1
+        elif actual > reference + 1e-12:
+            regressions += 1
+        else:
+            ties += 1
+    return wins, ties, regressions, denominator
+
+
+def _adaptive_comparison(groups: dict[tuple, list[dict[str, Any]]]) -> str:
+    fixed_priority = {
+        row["policy"]
+        for rows in groups.values()
+        for row in rows
+        if row.get("policy", "").startswith("static_")
+    }
+    static = _comparison_counts(groups, fixed_priority)
+    nonadaptive = _comparison_counts(groups, fixed_priority | {"fixed_order"})
+    if not static[3]:
+        return "No matched adaptive/static comparison is available."
+    return (
+        f"Against the best fixed-priority endpoint, adaptive lookahead has {static[0]} "
+        f"wins, {static[1]} ties, and {static[2]} regressions on {static[3]} matched "
+        f"feasible cases. Against the best nonadaptive endpoint including fixed order, "
+        f"it has {nonadaptive[0]} wins, {nonadaptive[1]} ties, and {nonadaptive[2]} "
+        f"regressions on {nonadaptive[3]} cases. Backend calls are shown per row; the "
+        "static weight multi-start budget is split across its predeclared vectors."
+    )
+
+
+def _trace_improvement(row: dict[str, Any]) -> float:
+    trace = row.get("trace", [])
+    if not trace:
+        return float("-inf")
+    return float(trace[0]["j_before"]) - float(trace[-1]["j_after"])
+
+
+def _mechanism_conclusion(
+    groups: dict[tuple, list[dict[str, Any]]], rows: list[dict[str, Any]]
+) -> str:
+    enabling = any(
+        row.get("policy") == "adaptive_lookahead"
+        and len(row.get("trace", [])) >= 2
+        and row["trace"][0].get("provisional")
+        and row["trace"][0]["j_after"] > row["trace"][0]["j_before"]
+        and row["trace"][-1]["j_after"] < row["trace"][0]["j_before"]
+        for row in rows
+    )
+    fixed_priority = {
+        row["policy"]
+        for row in rows
+        if row.get("policy", "").startswith("static_")
+    }
+    nonadaptive = _comparison_counts(groups, fixed_priority | {"fixed_order"})
+    if not nonadaptive[3]:
         return (
-            int(row["peak_workspace"]),
-            int(row["t_count"]),
-            int(row["t_depth"]),
-            stable_id,
+            "No matched adaptive/static mechanism conclusion is available for "
+            "this run."
+        )
+    mechanism = (
+        "At least one accepted sequence crosses a temporarily worse construction "
+        "state before exact joint optimization improves the fixed final objective. "
+        if enabling
+        else "No accepted sequence demonstrates a temporarily worse enabling state. "
+    )
+    if nonadaptive[0] == 0:
+        return (
+            mechanism
+            + "The best nonadaptive policy matches or beats every adaptive endpoint, "
+            "so these rows do not establish an adaptive-priority advantage."
         )
     return (
-        int(row["t_count"]),
-        int(row["t_depth"]),
-        int(row["peak_workspace"]),
-        stable_id,
+        mechanism
+        + f"Adaptive lookahead beats the best nonadaptive endpoint on {nonadaptive[0]} "
+        f"of {nonadaptive[3]} matched cases; independent evaluation is still required."
     )
 
 
-def _comparison_key(row: dict[str, Any]) -> tuple:
-    return tuple(
-        row.get(key)
-        for key in (
-            "target_hash",
-            "angle_id",
-            "error_budget",
-            "workspace_budget",
-            "model_profile",
-            "reuse_count",
-        )
-    )
-
-
-def _label(row: dict[str, Any]) -> str:
-    return f"{row['method']}:{row.get('variant') or 'unavailable'}"
-
-
-def _policy_alternatives(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    alternatives: list[dict[str, Any]] = []
-    for row in rows:
-        internal = row.get("evaluated_alternatives") or []
-        if internal and _eligible(row):
-            for item in internal:
-                resources = item.get("resource_tuple")
-                if not item.get("eligible") or resources is None:
-                    continue
-                alternatives.append(
-                    {
-                        "method": item["method"],
-                        "variant": item.get("variant"),
-                        "t_count": resources[0],
-                        "t_depth": resources[1],
-                        "peak_workspace": resources[2],
-                        "constraint_failure": item.get("constraint_failure"),
-                    }
-                )
-        elif _eligible(row):
-            alternatives.append(row)
-    return alternatives
-
-
-def render_comparison_report(
-    rows: list[dict[str, Any]], results_path: Path
-) -> str:
-    """Render the default construction/check/compare study report."""
-    study_identities = {
-        (
-            row.get("code_revision"),
-            row.get("config_hash"),
-            row.get("manifest_hash"),
-            row.get("objective"),
-            tuple(sorted((row.get("selection_limits") or {}).items())),
-        )
-        for row in rows
-    }
-    if len(study_identities) > 1:
-        raise ValueError(
-            "result report mixes revisions, configurations, or selection policies"
-        )
+def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> str:
+    identities = {_identity(row) for row in rows}
+    if len(identities) > 1:
+        raise ValueError("result report mixes revisions, configurations, or objectives")
     statuses = Counter(row.get("status", "unknown") for row in rows)
     groups: dict[tuple, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        groups[_comparison_key(row)].append(row)
-    objective = str(rows[0].get("objective", "t_count")) if rows else "t_count"
-    limits = rows[0].get("selection_limits", {}) if rows else {}
-    limit_text = ", ".join(
-        f"{name}={value}"
-        for name, value in limits.items()
-        if value is not None
-    ) or "none"
-
+        groups[_case_key(row)].append(row)
+    objective = rows[0].get("objective", {}) if rows else {}
+    limits = rows[0].get("limits", {}) if rows else {}
     lines = [
-        "# Construction Tradeoff Study",
+        "# Adaptive Resource Tradeoff Study",
         "",
         f"Results: `{results_path}`",
         "",
-        "This fixed study compares named circuit constructions under one common "
-        "parity-phase target, lowering backend, and whole-circuit operator-norm "
-        "error budget. Compilation time is diagnostic only.",
+        f"Fixed final objective: `{json.dumps(objective, sort_keys=True)}`. "
+        f"Hard limits: `{json.dumps(limits, sort_keys=True)}`.",
         "",
-        f"Declared selection policy: `{objective}`; hard limits: {limit_text}.",
+        "## Integrated Methods",
         "",
-        "## Status",
+        *_backend_summary(rows),
         "",
+        "Unsupported, timed-out, and verification-inconclusive outputs are not "
+        "treated as feasible alternatives.",
+        "",
+        "## Policy Outcomes",
+        "",
+        "`Resources` is `(T, scheduled T-depth, peak allocated workspace)`. The "
+        "objective and tie-breaks remain fixed across every row.",
+        "",
+        "| Case | Workspace budget | Policy | Status | Resources | J | Evaluations | Backend calls | Backend seconds |",
+        "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: |",
     ]
-    lines.extend(f"- `{status}`: {count}" for status, count in sorted(statuses.items()))
-
-    lines.extend(
-        [
-            "",
-            "## Construction Results",
-            "",
-            "Arithmetic T is the T cost outside synthesized rotations. Rotation T "
-            "includes application rotations and any resource-state preparation.",
-            "",
-            "| Case | Method | Variant | Generic rotations | Arithmetic T | "
-            "Rotation T | Total T | T-depth | Peak ancillas | Error | "
-            "Verification scope | Evidence |",
-            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | "
-            "---: | --- | --- |",
-        ]
-    )
-    for row in sorted(
-        rows,
-        key=lambda item: (
-            item.get("stratum", ""),
-            item.get("case_id", ""),
-            item.get("method", ""),
-        ),
-    ):
+    for row in sorted(rows, key=_row_order):
+        objective_value = row.get("objective_value")
         lines.append(
-            f"| {row.get('case_id', 'unknown')} | {row.get('method', 'unknown')} | "
-            f"{row.get('variant') or 'n/a'} | "
-            f"{row.get('generic_application_rotations', 'n/a')} | "
-            f"{row.get('arithmetic_t', 'n/a')} | {row.get('rotation_t', 'n/a')} | "
-            f"{row.get('t_count', 'n/a')} | {row.get('t_depth', 'n/a')} | "
-            f"{row.get('peak_workspace', 'n/a')} | {row.get('error_bound', 'n/a')} | "
-            f"{row.get('verification_scope', 'not_run')} | "
-            f"{row.get('evidence_level', 'unclassified')} / "
-            f"{row.get('reproduction_quality', 'unreviewed')} |"
+            f"| {_cell(row.get('case_id', 'unknown'))} | {row.get('workspace_budget', 'n/a')} | "
+            f"{_cell(row.get('policy', 'unknown'))} | "
+            f"{row.get('status', 'unknown')} | {_resources(row)} | "
+            f"{objective_value if objective_value is not None else 'n/a'} | "
+            f"{row.get('evaluations', 0)} | {row.get('backend_calls', 0)} | "
+            f"{float(row.get('backend_seconds', 0)):.6f} |"
         )
+    lines.extend(["", _adaptive_comparison(groups), ""])
 
     lines.extend(
         [
+            "## Paired Optimization",
             "",
-            "## Pareto And Selection",
+            "These are accepted backend steps only; construction-seed transitions "
+            "are listed separately in the decision trace.",
             "",
-            "The Pareto set uses `(T, T-depth, ancillas)` for every validated "
-            "default-study construction. Selection then applies the declared hard "
-            "limits and objective; limits are never relaxed.",
-            "",
-            "Each policy below selects among the same evaluated circuits. The "
-            f"configuration declares `{objective}`; the other columns expose how "
-            "preference alone changes the result.",
-            "",
-            "| Case | Pareto alternatives | T-count choice | T-depth choice | "
-            "Ancilla choice |",
-            "| --- | --- | --- | --- | --- |",
+            "| Case | Workspace budget | Policy | Backend action | Before | After |",
+            "| --- | ---: | --- | --- | --- | --- |",
         ]
     )
-    selected_rows: list[dict[str, Any]] = []
-    for group_rows in sorted(groups.values(), key=lambda values: values[0]["case_id"]):
-        eligible = _policy_alternatives(group_rows)
-        pareto = [
-            row
-            for row in eligible
-            if not any(other is not row and _dominates(other, row) for other in eligible)
-        ]
-        feasible = [row for row in eligible if row.get("constraint_failure") is None]
-        choices = {
-            policy: min(feasible, key=lambda row: _rank(row, policy))
-            if feasible
-            else None
-            for policy in ("t_count", "t_depth", "ancilla")
-        }
-        chosen = choices.get(objective)
-        top_level_feasible = [
-            row
-            for row in group_rows
-            if _eligible(row) and row.get("constraint_failure") is None
-        ]
-        if top_level_feasible:
-            selected_rows.append(
-                min(top_level_feasible, key=lambda row: _rank(row, objective))
+    accepted = 0
+    for row in sorted(rows, key=_row_order):
+        for step in row.get("trace", []):
+            if step.get("provisional"):
+                continue
+            accepted += 1
+            before = f"({step['t_before']}, {step['d_before']}, {step['a_before']})"
+            after = f"({step['t_after']}, {step['d_after']}, {step['a_after']})"
+            lines.append(
+                f"| {_cell(row['case_id'])} | {row.get('workspace_budget', 'n/a')} | "
+                f"{_cell(row['policy'])} | {_cell(step['action_backend'])} | "
+                f"{before} | {after} |"
             )
-        case_id = group_rows[0].get("case_id", "unknown")
-        pareto_text = ", ".join(sorted(_label(row) for row in pareto)) or "none"
-        choice_text = {
-            policy: _label(value) if value is not None else "no feasible alternative"
-            for policy, value in choices.items()
-        }
-        lines.append(
-            f"| {case_id} | {pareto_text} | {choice_text['t_count']} | "
-            f"{choice_text['t_depth']} | {choice_text['ancilla']} |"
-        )
+    if not accepted:
+        lines.append("| n/a | n/a | n/a | no accepted backend action | n/a | n/a |")
 
-    arithmetic_total = sum(int(row.get("arithmetic_t") or 0) for row in selected_rows)
-    rotation_total = sum(int(row.get("rotation_t") or 0) for row in selected_rows)
-    dominant = (
-        "rotation synthesis"
-        if rotation_total > arithmetic_total
-        else "reversible arithmetic"
-        if arithmetic_total > rotation_total
-        else "neither component"
-    )
-    independent_case = next(
-        (
-            row
-            for row in rows
-            if row.get("case_id") == "independent_equal_angle"
-            and row.get("method") == "independent"
-        ),
-        None,
-    )
-    independent_hwp = next(
-        (
-            row
-            for row in rows
-            if row.get("case_id") == "independent_equal_angle"
-            and row.get("method") == "hwp_adder_unitary"
-        ),
-        None,
-    )
-    weighted_hwp = next(
-        (
-            row
-            for row in rows
-            if row.get("case_id") == "weighted_triangle_free"
-            and row.get("method") == "hwp_adder_unitary"
-        ),
-        None,
-    )
+    trace_rows = [
+        row
+        for row in rows
+        if row.get("policy") == "adaptive_lookahead" and row.get("trace")
+    ]
+    trace_row = max(trace_rows, key=_trace_improvement, default=None)
     lines.extend(
         [
             "",
-            "## Interpretation",
+            "## Decision Trace",
             "",
-            f"Across the selected rows, arithmetic contributes {arithmetic_total} T "
-            f"gates and rotation synthesis contributes {rotation_total}; {dominant} "
-            "is the larger reported component.",
-            "",
+            "| Step | Region | Action/backend | Reason | Priority | T | D | A | J | Evaluations | Seconds | State |",
+            "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |",
         ]
     )
-    if independent_case is not None and independent_hwp is not None:
-        lines.extend(
-            [
-                "On `independent_equal_angle`, HWP changes T-count from "
-                f"{independent_case['t_count']} to {independent_hwp['t_count']}, "
-                f"T-depth from {independent_case['t_depth']} to "
-                f"{independent_hwp['t_depth']}, and peak ancillas from "
-                f"{independent_case['peak_workspace']} to "
-                f"{independent_hwp['peak_workspace']}. Thus the T-count choice "
-                "is not the T-depth or ancilla choice.",
-                "",
-            ]
-        )
-    if weighted_hwp is not None:
-        lines.extend(
-            [
-                "On `weighted_triangle_free`, distinct coefficients prevent a "
-                "multi-term equal-angle group. The HWP constructor records a "
-                "direct fallback, so its zero-workspace row ties the direct "
-                "references instead of demonstrating HWP applicability.",
-                "",
-            ]
-        )
+    if trace_row is None:
+        lines.append("| 0 | n/a | none | no accepted adaptive action | 0 | n/a | n/a | n/a | n/a | 0 | 0 | final |")
+    else:
+        for step in trace_row["trace"]:
+            lines.append(
+                f"| {step['step']} | {_cell(step['region'])} | "
+                f"{_cell(step['action_backend'])} | {_cell(step['reason'])} | "
+                f"{step['local_priority']:.4f} | "
+                f"{step['t_before']} -> {step['t_after']} | "
+                f"{step['d_before']} -> {step['d_after']} | "
+                f"{step['a_before']} -> {step['a_after']} | "
+                f"{step['j_before']:.6g} -> {step['j_after']:.6g} | "
+                f"{step['evaluations']} | {step['backend_seconds']:.6f} | "
+                f"{'provisional' if step['provisional'] else 'accepted'} |"
+            )
+
+    pareto: dict[tuple[str, int, int, int, int], set[str]] = defaultdict(set)
+    for row in rows:
+        for point in row.get("pareto", []):
+            resources = tuple(point["resources"])
+            key = (row["case_id"], row["workspace_budget"], *resources)
+            pareto[key].add(point["label"])
     lines.extend(
         [
-            "An `adder_compressor_unitary_cap_1` choice is the HWP generator's "
-            "zero-workspace direct fallback. Ancilla-first selections with that "
-            "label therefore use the direct circuit, not collective arithmetic.",
             "",
-            "Changing the objective does not generate another circuit. The policy "
-            "columns select only among the evaluated rows; each HWP artifact also "
-            "retains its evaluated batch variants and internal Pareto labels.",
+            "## Final Pareto Points",
             "",
-            "The ordinary-HWP row is a unitary adaptation of the cited staged-adder "
-            "construction. Reversing its arithmetic doubles the forward Toffoli "
-            "cost relative to measurement-assisted cleanup. Measured and catalytic "
-            "methods are unavailable here because their channel and resource-state "
-            "obligations have not been implemented.",
+            "| Case | Workspace budget | T | D | A | Implementations |",
+            "| --- | ---: | ---: | ---: | ---: | --- |",
+        ]
+    )
+    for key, labels in sorted(pareto.items()):
+        case_id, workspace, t_count, t_depth, ancilla = key
+        lines.append(
+            f"| {_cell(case_id)} | {workspace} | {t_count} | {t_depth} | {ancilla} | "
+            f"{_cell(', '.join(sorted(labels)))} |"
+        )
+    if not pareto:
+        lines.append("| n/a | n/a | n/a | n/a | n/a | no verified point |")
+
+    lines.extend(
+        [
             "",
-            "The dependent-triple rule and the ANF popcount implementation are "
-            "optional diagnostics, not default competitors. No novelty claim follows "
-            "from selecting the cheapest existing circuit.",
+            "## Mechanism Conclusion",
             "",
-            "## Research Decision",
+            _mechanism_conclusion(groups, rows),
             "",
-            "This seven-case development study does not establish a recurring "
-            "algorithmic limitation beyond ordinary HWP's expected equal-angle "
-            "applicability boundary. The weighted negative control is one boundary "
-            "example, not evidence for a new optimization mechanism.",
-            "",
-            "The next gated comparison is therefore implementation work rather than "
-            "a novelty claim: emit and channel-verify the audited Gidney cleanup or "
-            "Kan-Symons catalytic construction, include complete state preparation "
-            "over matching repeated uses, and test whether it adds a nondominated "
-            "point to this same fixed workload. If it does not, the hypothesis that "
-            "measured or catalytic cleanup changes the observed frontier is falsified.",
+            "Post-optimization T is reported only as a total because optimized gates "
+            "no longer have a reliable arithmetic-versus-rotation attribution.",
             "",
         ]
     )
+    if statuses:
+        lines.append(
+            "Recorded statuses: "
+            + ", ".join(f"`{name}`={count}" for name, count in sorted(statuses.items()))
+            + "."
+        )
+        lines.append("")
     return "\n".join(lines)

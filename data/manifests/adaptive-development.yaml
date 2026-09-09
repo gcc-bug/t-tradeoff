@@ -1,0 +1,19 @@
+schema_version: 1
+selection_rule: >-
+  Two predeclared synthetic development cases: one equal-angle mechanism witness
+  and one weighted negative control. Neither is held-out evidence.
+cases:
+  - id: hwp_joint_optimization_witness
+    stratum: explanatory
+    loader: generated_masks
+    masks: [1, 2, 4, 8]
+    qubit_count: 4
+    seed: 0
+    complete_workload: false
+  - id: weighted_no_collective_group
+    stratum: negative_control
+    loader: generated_graph
+    generator: weighted_path
+    parameters: {n: 6}
+    seed: 0
+    complete_workload: true

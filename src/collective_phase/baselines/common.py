@@ -20,7 +20,6 @@ class CompilationConstraints:
     workspace_budget: int | None
     model_profile: str
     batch_policy: str = "balanced"
-    catalyst_reuse_count: int = 1
     objective: str = "t_count"
     hwp_search_cap: int = 8
 
@@ -31,9 +30,7 @@ class CompilationConstraints:
             raise ValueError(f"unsupported model profile {self.model_profile!r}")
         if self.batch_policy not in {"balanced", "cost_aware"}:
             raise ValueError(f"unsupported batch policy {self.batch_policy!r}")
-        if self.catalyst_reuse_count < 1:
-            raise ValueError("catalyst reuse count must be positive")
-        if self.objective not in {"t_count", "t_depth", "ancilla", "pareto"}:
+        if self.objective not in {"t_count", "t_depth", "ancilla", "balance"}:
             raise ValueError(f"unsupported objective {self.objective!r}")
         if self.hwp_search_cap < 1:
             raise ValueError("hwp search cap must be positive")
@@ -90,12 +87,6 @@ def hwp_workspace(batch_size: int) -> int:
     return batch_size + max(batch_size - 1, batch_size.bit_length())
 
 
-def catalyst_workspace(batch_size: int) -> int:
-    if batch_size <= 1:
-        return hwp_workspace(batch_size)
-    return hwp_workspace(batch_size) + batch_size.bit_length()
-
-
 def max_batch_size(term_count: int, budget: int | None, workspace_fn) -> int:
     if term_count == 0:
         return 0
@@ -108,13 +99,10 @@ def max_batch_size(term_count: int, budget: int | None, workspace_fn) -> int:
     return result
 
 
-def _surrogate_cost(size: int, catalyzed: bool) -> int:
+def _surrogate_cost(size: int) -> int:
     if size == 1:
         return 40
     hwp_adders = size - size.bit_count()
-    if catalyzed:
-        gradient_toffolis = math.ceil(math.log2(size)) + 1
-        return 4 * hwp_adders + 7 * gradient_toffolis + 40
     return 4 * hwp_adders + size.bit_length() * 40
 
 
@@ -122,8 +110,6 @@ def batch_sizes(
     term_count: int,
     capacity: int,
     policy: str,
-    *,
-    catalyzed: bool = False,
 ) -> list[int]:
     if term_count == 0:
         return []
@@ -137,7 +123,7 @@ def batch_sizes(
     previous = [0] * (term_count + 1)
     for total in range(1, term_count + 1):
         for size in range(1, min(capacity, total) + 1):
-            cost = costs[total - size] + _surrogate_cost(size, catalyzed)
+            cost = costs[total - size] + _surrogate_cost(size)
             if cost < costs[total]:
                 costs[total] = cost
                 previous[total] = size

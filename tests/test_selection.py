@@ -8,6 +8,7 @@ from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import RotationSynthesizer
 from collective_phase.selection import (
+    FinalObjective,
     NoFeasibleAlternativeError,
     SelectionLimits,
     select_lowered_candidate,
@@ -52,7 +53,7 @@ def test_three_objectives_use_declared_tie_breaks_and_retain_pareto_set():
             RotationSynthesizer(),
             selected_method="hwp_adder_unitary",
             objective=objective,
-            limits={"ancilla": 8},
+            limits={"ancilla": 8, "t_count": 10_000, "t_depth": 10_000},
         )
         for objective in ("t_count", "t_depth", "ancilla")
     }
@@ -82,6 +83,46 @@ def test_three_objectives_use_declared_tie_breaks_and_retain_pareto_set():
         assert selected.candidate.selected_from == min(feasible, key=key).label
         assert selected.nondominated_labels
     assert selections["ancilla"].resources.peak_workspace == 0
+
+
+def test_balance_objective_uses_fixed_positive_references():
+    objective = FinalObjective.from_value(
+        {
+            "mode": "balance",
+            "weights": {"t_count": 1, "t_depth": 2, "ancilla": 0.5},
+            "references": {"t_count": 100, "t_depth": 20, "ancilla": 4},
+        }
+    )
+    assert objective.weights == (1.0, 2.0, 0.5)
+    assert objective.references == (100.0, 20.0, 4.0)
+    assert objective.to_dict()["references"]["ancilla"] == 4.0
+
+
+@pytest.mark.parametrize(
+    "value, message",
+    [
+        (
+            {"mode": "balance", "weights": {}, "references": {}},
+            "cannot all be zero",
+        ),
+        (
+            {
+                "mode": "balance",
+                "weights": {"t_count": 1},
+                "references": {"ancilla": 0},
+            },
+            "references must be positive",
+        ),
+    ],
+)
+def test_balance_objective_rejects_invalid_normalization(value, message):
+    with pytest.raises(ValueError, match=message):
+        FinalObjective.from_value(value)
+
+
+def test_ancilla_objective_requires_meaningful_other_targets():
+    with pytest.raises(ValueError, match="t_count and t_depth limits"):
+        FinalObjective(metric="ancilla").validate_limits(SelectionLimits(ancilla=8))
 
 
 def test_hard_limits_report_no_feasible_alternative_without_relaxing():

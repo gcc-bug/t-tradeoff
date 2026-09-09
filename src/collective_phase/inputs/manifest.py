@@ -15,7 +15,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
-    if not isinstance(config, dict) or config.get("schema_version") not in {1, 2}:
+    if not isinstance(config, dict) or config.get("schema_version") not in {1, 2, 3}:
         raise ValueError(f"unsupported config schema in {config_path}")
     config["_path"] = str(config_path.resolve())
     return config

@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 run_id: default-study
 manifest: data/manifests/refocus-study.yaml
 analysis_focus: established_construction_tradeoffs
@@ -8,14 +8,8 @@ angles:
 total_error_budgets: [1.0e-4]
 workspace_budgets: [8]
 model_profiles: [unitary_clifford_t]
-methods:
-  - independent
-  - shared_parity
-  - hwp_adder_unitary
-required_methods:
-  - independent
-  - shared_parity
-  - hwp_adder_unitary
+policies: [construction_only]
+required_policies: [construction_only]
 objective: t_count
 limits:
   ancilla: 8
@@ -24,5 +18,9 @@ limits:
 hwp_batch_policy: balanced
 hwp_search_cap: 8
 seed: 0
+search:
+  backend_call_budget: 0
+  backend_seconds_budget: 30
+  actions: []
 results_dir: results/raw/default-study
 diagnosis_path: reports/default-study-diagnosis.md

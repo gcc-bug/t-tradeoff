@@ -1,0 +1,57 @@
+schema_version: 3
+run_id: adaptive-comparison
+manifest: data/manifests/adaptive-development.yaml
+analysis_focus: adaptive_priority_and_lookahead
+angles:
+  - id: theta_0173
+    value: "0.173"
+total_error_budgets: [1.0e-4]
+workspace_budgets: [8]
+model_profiles: [unitary_clifford_t]
+policies:
+  - static_t
+  - static_depth
+  - static_ancilla
+  - static_balanced
+  - static_count_depth
+  - static_count_ancilla
+  - fixed_order
+  - adaptive
+  - adaptive_lookahead
+  - static_t_lookahead
+required_policies:
+  - static_t
+  - static_depth
+  - static_ancilla
+  - static_balanced
+  - static_count_depth
+  - static_count_ancilla
+  - fixed_order
+  - adaptive
+  - adaptive_lookahead
+  - static_t_lookahead
+objective:
+  mode: balance
+  weights: {t_count: 0.9, t_depth: 0.05, ancilla: 0.05}
+  references: {t_count: 200, t_depth: 200, ancilla: 8}
+limits:
+  ancilla: 8
+  t_depth: 300
+  t_count: 400
+hwp_search_cap: 4
+seed: 0
+backends:
+  feynman:
+    executable: feynopt
+    revision: v0.1.0@2b52a0a78c10999cfc4c1d9c76c994c471cf2350
+    timeout_seconds: 20
+search:
+  backend_call_budget: 4
+  backend_seconds_budget: 30
+  actions:
+    - pyzx:zx_extract
+    - pyzx:todd
+    - feynman:tpar
+    - feynman:phasefold
+results_dir: results/raw/adaptive-comparison
+diagnosis_path: reports/adaptive-comparison-diagnosis.md

@@ -2,9 +2,27 @@ from pathlib import Path
 
 import pytest
 
-from collective_phase.inputs.manifest import load_case
+from collective_phase.inputs.manifest import load_case, load_config
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.profiles import binary_rank, dependent_triples, profile
+
+
+def test_config_loader_accepts_current_schema(tmp_path: Path):
+    config_path = tmp_path / "study.yaml"
+    config_path.write_text("schema_version: 3\nrun_id: test\n", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config["schema_version"] == 3
+    assert config["_path"] == str(config_path.resolve())
+
+
+def test_config_loader_rejects_unknown_schema(tmp_path: Path):
+    config_path = tmp_path / "study.yaml"
+    config_path.write_text("schema_version: 4\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsupported config schema"):
+        load_config(config_path)
 
 
 def test_maxcut_loader_uses_xor_parities_and_declared_bit_order(tmp_path: Path):
@@ -59,4 +77,3 @@ def test_graph_profile_counts_triangles_once():
         metadata={"edges": [[0, 1], [1, 2], [0, 2]], "source_hash": "x"},
     )
     assert profile(program).graph["triangle_count"] == 1
-

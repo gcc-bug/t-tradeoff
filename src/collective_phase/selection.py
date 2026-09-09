@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import math
 from typing import Any
 
 from .circuit import Candidate
@@ -24,6 +25,7 @@ class EvaluatedAlternative:
     resources: ResourceRecord | None = None
     failure_reason: str | None = None
     constraint_failure: str | None = None
+    objective_value: float | None = None
 
     @property
     def eligible(self) -> bool:
@@ -69,6 +71,7 @@ class EvaluatedAlternative:
             "resource_tuple": self.resource_tuple,
             "failure_reason": self.failure_reason or self.candidate.failure_reason,
             "constraint_failure": self.constraint_failure,
+            "objective_value": self.objective_value,
         }
 
     def artifact(self) -> dict[str, Any]:
@@ -102,6 +105,7 @@ class SelectionResult:
     alternatives: list[EvaluatedAlternative]
     nondominated_labels: list[str]
     limits: "SelectionLimits"
+    objective: "FinalObjective"
 
 
 @dataclass(frozen=True)
@@ -154,6 +158,147 @@ class SelectionLimits:
         return ", ".join(failures) or None
 
 
+@dataclass(frozen=True)
+class FinalObjective:
+    mode: str = "single"
+    metric: str = "t_count"
+    t_weight: float = 0.0
+    depth_weight: float = 0.0
+    ancilla_weight: float = 0.0
+    t_reference: float = 1.0
+    depth_reference: float = 1.0
+    ancilla_reference: float = 1.0
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"single", "balance"}:
+            raise ValueError("objective mode must be 'single' or 'balance'")
+        if self.metric not in {"t_count", "t_depth", "ancilla"}:
+            raise ValueError(f"unsupported objective metric {self.metric!r}")
+        numeric = (
+            self.t_weight,
+            self.depth_weight,
+            self.ancilla_weight,
+            self.t_reference,
+            self.depth_reference,
+            self.ancilla_reference,
+        )
+        if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in numeric):
+            raise ValueError("objective weights and references must be finite numbers")
+        if any(value < 0 for value in self.weights):
+            raise ValueError("objective weights must be non-negative")
+        if self.mode == "balance" and not any(self.weights):
+            raise ValueError("balance objective weights cannot all be zero")
+        if any(value <= 0 for value in self.references):
+            raise ValueError("objective references must be positive")
+
+    @property
+    def weights(self) -> tuple[float, float, float]:
+        return (self.t_weight, self.depth_weight, self.ancilla_weight)
+
+    @property
+    def references(self) -> tuple[float, float, float]:
+        return (self.t_reference, self.depth_reference, self.ancilla_reference)
+
+    @property
+    def name(self) -> str:
+        return self.metric if self.mode == "single" else "balance"
+
+    @classmethod
+    def from_value(cls, value: "FinalObjective | str | dict[str, Any]") -> "FinalObjective":
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            return cls(metric=value)
+        unknown = set(value) - {"mode", "metric", "weights", "references"}
+        if unknown:
+            raise ValueError(f"unknown objective fields: {sorted(unknown)}")
+        mode = str(value.get("mode", "single"))
+        metric = str(value.get("metric", "t_count"))
+        weights = value.get("weights", {})
+        references = value.get("references", {})
+        if not isinstance(weights, dict) or not isinstance(references, dict):
+            raise ValueError("objective weights and references must be mappings")
+        return cls(
+            mode=mode,
+            metric=metric,
+            t_weight=float(weights.get("t_count", 0.0)),
+            depth_weight=float(weights.get("t_depth", 0.0)),
+            ancilla_weight=float(weights.get("ancilla", 0.0)),
+            t_reference=float(references.get("t_count", 1.0)),
+            depth_reference=float(references.get("t_depth", 1.0)),
+            ancilla_reference=float(references.get("ancilla", 1.0)),
+        )
+
+    def validate_limits(self, limits: SelectionLimits) -> None:
+        if self.mode == "single" and self.metric == "ancilla":
+            if limits.t_count is None or limits.t_depth is None:
+                raise ValueError(
+                    "ancilla objective requires explicit t_count and t_depth limits"
+                )
+
+    def value(self, resources: ResourceRecord) -> float:
+        if self.mode == "single":
+            return float(
+                {
+                    "t_count": resources.t_count,
+                    "t_depth": resources.t_depth,
+                    "ancilla": resources.peak_workspace,
+                }[self.metric]
+            )
+        values = (
+            resources.t_count,
+            resources.t_depth,
+            resources.peak_workspace,
+        )
+        return sum(
+            weight * value / reference
+            for weight, value, reference in zip(
+                self.weights, values, self.references, strict=True
+            )
+        )
+
+    def rank(self, resources: ResourceRecord, label: str) -> tuple:
+        if self.mode == "balance":
+            return (
+                self.value(resources),
+                resources.t_count,
+                resources.t_depth,
+                resources.peak_workspace,
+                label,
+            )
+        values = {
+            "t_count": (
+                resources.t_count,
+                resources.t_depth,
+                resources.peak_workspace,
+            ),
+            "t_depth": (
+                resources.t_depth,
+                resources.t_count,
+                resources.peak_workspace,
+            ),
+            "ancilla": (
+                resources.peak_workspace,
+                resources.t_count,
+                resources.t_depth,
+            ),
+        }
+        return (*values[self.metric], label)
+
+    def to_dict(self) -> dict[str, Any]:
+        value: dict[str, Any] = {"mode": self.mode}
+        if self.mode == "single":
+            value["metric"] = self.metric
+        else:
+            value["weights"] = dict(
+                zip(("t_count", "t_depth", "ancilla"), self.weights, strict=True)
+            )
+            value["references"] = dict(
+                zip(("t_count", "t_depth", "ancilla"), self.references, strict=True)
+            )
+        return value
+
+
 class NoFeasibleAlternativeError(RuntimeError):
     """Raised when valid alternatives exist but every one violates a hard limit."""
 
@@ -179,29 +324,9 @@ def _nondominated(alternatives: list[EvaluatedAlternative]) -> list[str]:
     return sorted(result)
 
 
-def _rank(item: EvaluatedAlternative, objective: str) -> tuple:
+def _rank(item: EvaluatedAlternative, objective: FinalObjective) -> tuple:
     assert item.resources is not None
-    resources = item.resources
-    if objective == "t_depth":
-        return (
-            resources.t_depth,
-            resources.t_count,
-            resources.peak_workspace,
-            item.label,
-        )
-    if objective == "ancilla":
-        return (
-            resources.peak_workspace,
-            resources.t_count,
-            resources.t_depth,
-            item.label,
-        )
-    return (
-        resources.t_count,
-        resources.t_depth,
-        resources.peak_workspace,
-        item.label,
-    )
+    return objective.rank(item.resources, item.label)
 
 
 def evaluate_alternatives(
@@ -244,60 +369,20 @@ def select_lowered_candidate(
     synthesizer: RotationSynthesizer,
     *,
     selected_method: str,
-    objective: str,
-    preferred_method: str | None = None,
+    objective: FinalObjective | str | dict[str, Any],
     limits: SelectionLimits | dict[str, int | None] | None = None,
 ) -> SelectionResult:
-    if objective not in {"t_count", "t_depth", "ancilla", "pareto"}:
-        raise ValueError(f"unsupported selection objective {objective!r}")
     normalized_limits = SelectionLimits.from_value(limits)
+    normalized_objective = FinalObjective.from_value(objective)
+    normalized_objective.validate_limits(normalized_limits)
     alternatives = evaluate_alternatives(candidates, total_error, synthesizer)
-    eligible = [item for item in alternatives if item.eligible]
-    if not eligible:
-        reasons = "; ".join(
-            f"{item.label}: {item.failure_reason}" for item in alternatives
-        )
-        raise RuntimeError(f"no eligible emitted alternative: {reasons}")
-    for item in eligible:
-        assert item.resources is not None
-        item.constraint_failure = normalized_limits.violation(item.resources)
-    feasible = [item for item in eligible if item.feasible]
-    if not feasible:
-        reasons = "; ".join(
-            f"{item.label}: {item.constraint_failure}" for item in eligible
-        )
-        raise NoFeasibleAlternativeError(f"no feasible alternative: {reasons}")
-    if objective == "pareto" and preferred_method is not None:
-        preferred = [
-            item for item in feasible if item.candidate.method == preferred_method
-        ]
-        chosen = None
-        for item in sorted(preferred, key=lambda value: _rank(value, "t_count")):
-            assert item.resource_tuple is not None
-            if all(
-                other is item
-                or other.resource_tuple is None
-                or _dominates(item.resource_tuple, other.resource_tuple)
-                or item.resource_tuple == other.resource_tuple
-                for other in feasible
-            ):
-                chosen = item
-                break
-        if chosen is None:
-            nonpreferred = [
-                item for item in feasible if item.candidate.method != preferred_method
-            ]
-            chosen = min(
-                nonpreferred or feasible,
-                key=lambda value: _rank(value, "t_count"),
-            )
-    else:
-        chosen = min(feasible, key=lambda value: _rank(value, objective))
-
+    chosen = select_evaluated_alternative(
+        alternatives, normalized_objective, normalized_limits
+    )
     nondominated = _nondominated(alternatives)
     selection_trace = {
         "action": "full_circuit_objective_selection",
-        "objective": objective,
+        "objective": normalized_objective.to_dict(),
         "limits": normalized_limits.to_dict(),
         "selected": chosen.label,
         "nondominated": nondominated,
@@ -307,10 +392,10 @@ def select_lowered_candidate(
         chosen.candidate,
         method=selected_method,
         selected_from=chosen.label,
-        objective=objective,
+        objective=normalized_objective.name,
         parameters={
             **chosen.candidate.parameters,
-            "selection_objective": objective,
+            "selection_objective": normalized_objective.to_dict(),
             "selection_limits": normalized_limits.to_dict(),
             "selection_alternatives": [item.summary() for item in alternatives],
             "nondominated_alternatives": nondominated,
@@ -335,4 +420,33 @@ def select_lowered_candidate(
         alternatives=alternatives,
         nondominated_labels=nondominated,
         limits=normalized_limits,
+        objective=normalized_objective,
     )
+
+
+def select_evaluated_alternative(
+    alternatives: list[EvaluatedAlternative],
+    objective: FinalObjective | str | dict[str, Any],
+    limits: SelectionLimits | dict[str, int | None] | None = None,
+) -> EvaluatedAlternative:
+    """Select from measured complete circuits without lowering them again."""
+    normalized_limits = SelectionLimits.from_value(limits)
+    normalized_objective = FinalObjective.from_value(objective)
+    normalized_objective.validate_limits(normalized_limits)
+    eligible = [item for item in alternatives if item.eligible]
+    if not eligible:
+        reasons = "; ".join(
+            f"{item.label}: {item.failure_reason}" for item in alternatives
+        )
+        raise RuntimeError(f"no eligible emitted alternative: {reasons}")
+    for item in eligible:
+        assert item.resources is not None
+        item.constraint_failure = normalized_limits.violation(item.resources)
+        item.objective_value = normalized_objective.value(item.resources)
+    feasible = [item for item in eligible if item.feasible]
+    if not feasible:
+        reasons = "; ".join(
+            f"{item.label}: {item.constraint_failure}" for item in eligible
+        )
+        raise NoFeasibleAlternativeError(f"no feasible alternative: {reasons}")
+    return min(feasible, key=lambda value: _rank(value, normalized_objective))

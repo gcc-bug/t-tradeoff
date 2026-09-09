@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 run_id: smoke
 manifest: data/manifests/smoke.yaml
 analysis_focus: active_pipeline_smoke
@@ -8,14 +8,12 @@ angles:
 total_error_budgets: [1.0e-4]
 workspace_budgets: [0, 8]
 model_profiles: [unitary_clifford_t]
-methods:
-  - independent
-  - shared_parity
-  - hwp_adder_unitary
-required_methods:
-  - independent
-  - shared_parity
-  - hwp_adder_unitary
+policies:
+  - construction_only
+  - adaptive
+required_policies:
+  - construction_only
+  - adaptive
 objective: t_count
 limits:
   ancilla: 8
@@ -24,5 +22,9 @@ limits:
 hwp_batch_policy: balanced
 hwp_search_cap: 4
 seed: 0
+search:
+  backend_call_budget: 1
+  backend_seconds_budget: 10
+  actions: [pyzx:zx_extract]
 results_dir: results/raw/smoke
 diagnosis_path: reports/diagnosis-smoke.md
