@@ -33,7 +33,7 @@ class CompilationConstraints:
             raise ValueError(f"unsupported batch policy {self.batch_policy!r}")
         if self.catalyst_reuse_count < 1:
             raise ValueError("catalyst reuse count must be positive")
-        if self.objective not in {"t_count", "t_depth", "pareto"}:
+        if self.objective not in {"t_count", "t_depth", "ancilla", "pareto"}:
             raise ValueError(f"unsupported objective {self.objective!r}")
         if self.hwp_search_cap < 1:
             raise ValueError("hwp search cap must be positive")

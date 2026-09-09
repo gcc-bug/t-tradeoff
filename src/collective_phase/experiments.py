@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from .baselines import (
     compile_catalyzed_hwp,
+    compile_hwp_adder_unitary_alternatives,
     compile_hwp_emitted_alternatives,
     compile_hwp_emitted_triple_grouped,
     compile_hwp_macro_legacy,
@@ -37,7 +38,8 @@ from .lowering import (
 from .preprocessing import PREPROCESSING_VERSION
 from .profiles import StructuralProfile, profile
 from .resources import ResourceRecord, characterize_tradeoff, estimate_resources
-from .selection import SelectionResult, select_lowered_candidate
+from .reporting import render_comparison_report
+from .selection import SelectionLimits, SelectionResult, select_lowered_candidate
 from .verification import (
     LoweredVerificationResult,
     VerificationResult,
@@ -49,18 +51,87 @@ from .verification import (
 RESULT_SCHEMA_VERSION = 2
 SEMANTIC_PROFILE = "diagonal-p-v1:block-local:operator-norm"
 ERROR_METRIC = "operator_norm_telescoping"
-STRONG_BASELINES = (
+METHOD_EVIDENCE: dict[str, dict[str, Any]] = {
+    "independent": {
+        "level": "basic_reference",
+        "reproduction_quality": "emitted_and_verified",
+        "default_eligible": True,
+    },
+    "shared_parity": {
+        "level": "basic_reference",
+        "reproduction_quality": "emitted_and_verified",
+        "default_eligible": True,
+    },
+    "hwp_adder_unitary": {
+        "level": "audited_prior_construction",
+        "reproduction_quality": "unitary_adaptation_emitted_and_verified",
+        "default_eligible": True,
+    },
+    "hwp_emitted": {
+        "level": "correctness_reference",
+        "reproduction_quality": "small_anf_reference",
+        "default_eligible": False,
+    },
+    "hwp_emitted_triple_grouped": {
+        "level": "diagnostic",
+        "reproduction_quality": "small_anf_reference",
+        "default_eligible": False,
+    },
+    "hwp_dependency_simplified": {
+        "level": "equivalence_demonstration",
+        "reproduction_quality": "emitted_and_verified",
+        "default_eligible": False,
+    },
+    "dependent_triples_raw": {
+        "level": "diagnostic",
+        "reproduction_quality": "emitted_and_verified",
+        "default_eligible": False,
+    },
+    "dependent_triples_selected": {
+        "level": "diagnostic_policy",
+        "reproduction_quality": "emitted_and_verified",
+        "default_eligible": False,
+    },
+    "hwp_macro_legacy": {
+        "level": "historical_estimate",
+        "reproduction_quality": "formula_macro_only",
+        "default_eligible": False,
+    },
+    "catalyzed_hwp_unverified": {
+        "level": "unverified_estimate",
+        "reproduction_quality": "formula_macro_only",
+        "default_eligible": False,
+    },
+    "joint_synthesis": {
+        "level": "unavailable",
+        "reproduction_quality": "not_integrated",
+        "default_eligible": False,
+    },
+}
+
+# Retained only by ``render_historical_tradeoff_report`` so old analyses can be
+# regenerated without making these name-based groups part of the default study.
+HISTORICAL_STRONG_BASELINES = (
     "hwp_emitted",
     "hwp_emitted_triple_grouped",
     "hwp_dependency_simplified",
 )
-BASIC_BASELINES = ("independent", "shared_parity")
-PRIMARY_METHODS = {
-    *STRONG_BASELINES,
-    *BASIC_BASELINES,
-    "dependent_triples_raw",
-    "dependent_triples_selected",
-}
+HISTORICAL_BASIC_BASELINES = ("independent", "shared_parity")
+
+
+def _method_evidence(method: str) -> dict[str, Any]:
+    return METHOD_EVIDENCE.get(
+        method,
+        {
+            "level": "unclassified",
+            "reproduction_quality": "unreviewed",
+            "default_eligible": False,
+        },
+    )
+
+
+def _default_evidence_eligible(method: str) -> bool:
+    return bool(_method_evidence(method)["default_eligible"])
 
 Compiler = Callable[[PhaseProgram, CompilationConstraints], Candidate]
 COMPILERS: dict[str, Compiler] = {
@@ -72,7 +143,12 @@ COMPILERS: dict[str, Compiler] = {
     "hwp_dependency_simplified": compile_hwp_dependency_simplified,
     "dependent_triples_raw": compile_dependent_triples_raw,
 }
-SPECIAL_METHODS = {"hwp_emitted", "dependent_triples_selected", "joint_synthesis"}
+SPECIAL_METHODS = {
+    "hwp_adder_unitary",
+    "hwp_emitted",
+    "dependent_triples_selected",
+    "joint_synthesis",
+}
 
 
 @dataclass
@@ -178,10 +254,31 @@ def audit_configuration(config: dict[str, Any]) -> dict[str, Any]:
     ]
     methods = list(config.get("methods", []))
     unknown = sorted(set(methods) - set(COMPILERS) - SPECIAL_METHODS)
+    configuration_errors: list[str] = []
+    objective = config.get("objective", "t_count")
+    if objective not in {"t_count", "t_depth", "ancilla", "pareto"}:
+        configuration_errors.append(
+            f"unsupported selection objective {objective!r}"
+        )
+    try:
+        limits = SelectionLimits.from_value(config.get("limits"))
+    except (TypeError, ValueError) as exc:
+        configuration_errors.append(str(exc))
+        limits = None
     versions = _dependency_versions()
     synthesis_available = versions["pygridsynth"] != "unavailable"
-    executable = not unknown and synthesis_available and not missing
-    strong_methods = sorted(set(methods) & set(STRONG_BASELINES))
+    executable = (
+        not unknown
+        and not configuration_errors
+        and synthesis_available
+        and not missing
+    )
+    evidence = {method: _method_evidence(method) for method in methods}
+    audited_methods = sorted(
+        method
+        for method in methods
+        if evidence[method]["level"] == "audited_prior_construction"
+    )
     return {
         "config": config["_path"],
         "config_schema_version": config.get("schema_version"),
@@ -201,7 +298,11 @@ def audit_configuration(config: dict[str, Any]) -> dict[str, Any]:
         "remote_case_count": len(remote),
         "missing_remote_inputs": missing,
         "methods": methods,
+        "method_evidence": evidence,
         "unknown_methods": unknown,
+        "selection_objective": objective,
+        "selection_limits": None if limits is None else limits.to_dict(),
+        "configuration_errors": configuration_errors,
         "generic_synthesis_available": synthesis_available,
         "semantic_profile": SEMANTIC_PROFILE,
         "preprocessing_version": PREPROCESSING_VERSION,
@@ -210,8 +311,8 @@ def audit_configuration(config: dict[str, Any]) -> dict[str, Any]:
             "analysis_focus", "fully_lowered_resource_outcomes"
         ),
         "basic_run_ready": executable,
-        "strong_comparison_methods": strong_methods,
-        "strong_comparison_ready": executable and bool(strong_methods),
+        "audited_construction_methods": audited_methods,
+        "audited_comparison_ready": executable and bool(audited_methods),
         "measured_catalytic_primary_ready": False,
         "ready": executable,
     }
@@ -318,15 +419,26 @@ def _execute_method(
     constraints: CompilationConstraints,
     total_error: float,
     synthesizer: RotationSynthesizer,
+    limits: SelectionLimits,
 ) -> ExecutedCandidate:
     selection: SelectionResult | None = None
-    if method == "hwp_emitted":
+    if method == "hwp_adder_unitary":
+        selection = select_lowered_candidate(
+            compile_hwp_adder_unitary_alternatives(program, constraints),
+            total_error,
+            synthesizer,
+            selected_method="hwp_adder_unitary",
+            objective=constraints.objective,
+            limits=limits,
+        )
+    elif method == "hwp_emitted":
         selection = select_lowered_candidate(
             compile_hwp_emitted_alternatives(program, constraints),
             total_error,
             synthesizer,
             selected_method="hwp_emitted",
             objective=constraints.objective,
+            limits=limits,
         )
     elif method == "dependent_triples_selected":
         selection = select_lowered_candidate(
@@ -340,6 +452,7 @@ def _execute_method(
             selected_method="dependent_triples_selected",
             objective=constraints.objective,
             preferred_method="dependent_triples_raw",
+            limits=limits,
         )
     if selection is not None:
         lowered_verification = verify_lowered_circuit(
@@ -393,10 +506,15 @@ def _base_row(
         "variant": None,
         "selected_from": None,
         "selected_construction": None,
+        "evaluated_alternatives": [],
         "used_rewrite": False,
         "matched_triples": 0,
         "accounting_status": None,
+        "evidence_level": None,
+        "reproduction_quality": None,
         "primary_eligible": False,
+        "policy_feasible": False,
+        "constraint_failure": None,
         "ideal_verification_status": "not_run",
         "lowered_verification_status": "not_run",
         "verification_scope": "not_run",
@@ -420,6 +538,8 @@ def _base_row(
         "logical_toffoli_count": None,
         "logical_cx_count": None,
         "logical_x_count": None,
+        "arithmetic_t": None,
+        "rotation_t": None,
         "compile_seconds": None,
         "circuit_path": None,
         "circuit_hash": None,
@@ -461,6 +581,9 @@ def run_experiments(
                                 objective = config.get(
                                     "objective", "t_count"
                                 )
+                                limits = SelectionLimits.from_value(
+                                    config.get("limits")
+                                )
                                 identity = {
                                     "result_schema_version": RESULT_SCHEMA_VERSION,
                                     "case_id": program.id,
@@ -478,6 +601,7 @@ def run_experiments(
                                     "method": method,
                                     "reuse_count": int(reuse),
                                     "objective": objective,
+                                    "selection_limits": limits.to_dict(),
                                     "analysis_focus": config.get(
                                         "analysis_focus",
                                         "fully_lowered_resource_outcomes",
@@ -524,8 +648,10 @@ def run_experiments(
                                         constraints,
                                         float(total_error),
                                         synthesizer,
+                                        limits,
                                     )
                                     candidate = executed.candidate
+                                    evidence = _method_evidence(method)
                                     row.update(
                                         {
                                             "status": candidate.status,
@@ -535,6 +661,9 @@ def run_experiments(
                                             "selected_construction": (
                                                 candidate.selected_from
                                                 or candidate.variant
+                                            ),
+                                            "evaluated_alternatives": candidate.parameters.get(
+                                                "selection_alternatives", []
                                             ),
                                             "used_rewrite": bool(
                                                 candidate.parameters.get(
@@ -547,6 +676,10 @@ def run_experiments(
                                                 )
                                             ),
                                             "accounting_status": candidate.accounting_status,
+                                            "evidence_level": evidence["level"],
+                                            "reproduction_quality": evidence[
+                                                "reproduction_quality"
+                                            ],
                                             "ideal_verification_status": executed.ideal_verification.status,
                                             "peak_workspace": candidate.workspace_qubits,
                                             "total_qubits": (
@@ -606,10 +739,17 @@ def run_experiments(
                                                 executed.lowered_verification.operator_norm_error
                                             )
                                             row["primary_eligible"] = (
-                                                method in PRIMARY_METHODS
+                                                _default_evidence_eligible(method)
                                                 and candidate.accounting_status
                                                 == "emitted"
                                                 and emitted_ok
+                                            )
+                                            row["constraint_failure"] = (
+                                                limits.violation(executed.resources)
+                                            )
+                                            row["policy_feasible"] = (
+                                                row["primary_eligible"]
+                                                and row["constraint_failure"] is None
                                             )
                                             artifact = {
                                                 "schema_version": RESULT_SCHEMA_VERSION,
@@ -692,7 +832,7 @@ def required_run_failures(
                 f"{row['row_id']}: {row['method']} status={row['status']}"
             )
         elif (
-            row["method"] in PRIMARY_METHODS
+            _default_evidence_eligible(row["method"])
             and not row.get("primary_eligible", False)
         ):
             failures.append(
@@ -779,6 +919,13 @@ def verify_result_rows(
             failures.append(f"{row_id}: invalid compile_seconds")
         if row.get("status") != "success":
             continue
+        try:
+            selection_limits = SelectionLimits.from_value(
+                row.get("selection_limits")
+            )
+        except (TypeError, ValueError) as exc:
+            failures.append(f"{row_id}: invalid selection limits: {exc}")
+            selection_limits = None
         for field in (
             "error_budget",
             "error_bound",
@@ -862,6 +1009,12 @@ def verify_result_rows(
                     failures.append(
                         f"{row_id}: candidate {key} mismatch"
                     )
+            if row.get("evaluated_alternatives") != candidate.parameters.get(
+                "selection_alternatives", []
+            ):
+                failures.append(
+                    f"{row_id}: evaluated alternative summaries mismatch"
+                )
             if _operation_signature(candidate) != row.get(
                 "operation_signature"
             ):
@@ -948,7 +1101,7 @@ def verify_result_rows(
                         f"{row_id}: emitted row lacks lowered verification"
                     )
                 expected_primary = (
-                    row.get("method") in PRIMARY_METHODS
+                    _default_evidence_eligible(row.get("method", ""))
                     and candidate.accounting_status == "emitted"
                     and emitted_ok
                 )
@@ -956,6 +1109,21 @@ def verify_result_rows(
                     failures.append(
                         f"{row_id}: primary eligibility mismatch"
                     )
+                evidence = _method_evidence(row.get("method", ""))
+                if row.get("evidence_level") != evidence["level"]:
+                    failures.append(f"{row_id}: evidence level mismatch")
+                if row.get("reproduction_quality") != evidence[
+                    "reproduction_quality"
+                ]:
+                    failures.append(f"{row_id}: reproduction quality mismatch")
+                if selection_limits is not None:
+                    expected_failure = selection_limits.violation(resources)
+                    if row.get("constraint_failure") != expected_failure:
+                        failures.append(f"{row_id}: constraint result mismatch")
+                    if row.get("policy_feasible") != (
+                        expected_primary and expected_failure is None
+                    ):
+                        failures.append(f"{row_id}: policy feasibility mismatch")
                 if expected_primary and not _finite_number(
                     row.get("clifford_count")
                 ):
@@ -1041,6 +1209,14 @@ def verify_result_rows(
                         alternative_resources.peak_workspace,
                     ]
                 )
+                constraint_failure = (
+                    selection_limits.violation(alternative_resources)
+                    if eligible
+                    and selection_limits is not None
+                    and alternative_resources is not None
+                    else None
+                )
+                feasible = eligible and constraint_failure is None
                 if alternative.get("eligible") != eligible:
                     failures.append(
                         f"{row_id}:alternative:{index}: eligibility mismatch"
@@ -1049,10 +1225,19 @@ def verify_result_rows(
                     failures.append(
                         f"{row_id}:alternative:{index}: resource tuple mismatch"
                     )
+                if alternative.get("constraint_failure") != constraint_failure:
+                    failures.append(
+                        f"{row_id}:alternative:{index}: constraint result mismatch"
+                    )
+                if alternative.get("feasible") != feasible:
+                    failures.append(
+                        f"{row_id}:alternative:{index}: feasibility mismatch"
+                    )
                 replayed_alternatives.append(
                     {
                         "label": alternative["label"],
                         "eligible": eligible,
+                        "feasible": feasible,
                         "resource_tuple": resource_tuple,
                         "operation_signature": _operation_signature(
                             alternative_candidate
@@ -1060,13 +1245,13 @@ def verify_result_rows(
                     }
                 )
             if replayed_alternatives and row.get("selected_from"):
-                eligible_alternatives = [
+                feasible_alternatives = [
                     value
                     for value in replayed_alternatives
-                    if value["eligible"]
+                    if value.get("feasible")
                 ]
                 objective = row.get("objective", "t_count")
-                if objective in {"t_count", "t_depth"}:
+                if objective in {"t_count", "t_depth", "ancilla"}:
                     def rank(value):
                         resources = value["resource_tuple"]
                         if objective == "t_depth":
@@ -1074,6 +1259,13 @@ def verify_result_rows(
                                 resources[1],
                                 resources[0],
                                 resources[2],
+                                value["label"],
+                            )
+                        if objective == "ancilla":
+                            return (
+                                resources[2],
+                                resources[0],
+                                resources[1],
                                 value["label"],
                             )
                         return (
@@ -1084,7 +1276,7 @@ def verify_result_rows(
                         )
 
                     expected_selection = min(
-                        eligible_alternatives, key=rank
+                        feasible_alternatives, key=rank
                     )["label"]
                     if row["selected_from"] != expected_selection:
                         failures.append(
@@ -1127,8 +1319,8 @@ def verify_result_rows(
         ),
         "scope": (
             "schema-v2 target, ideal semantics, deterministic lowering, "
-            "independent emitted gates, rotation-arithmetic tradeoffs, "
-            "synthesis errors, and resources"
+            "independent primitive decompositions, exact emitted-event binding, "
+            "whole-circuit synthesis errors, selection policy, and resources"
         ),
     }
 
@@ -1223,7 +1415,7 @@ def _comparison_counts(
     return result
 
 
-def render_report(
+def render_historical_tradeoff_report(
     rows: list[dict[str, Any]], results_path: Path
 ) -> str:
     paired = _paired_rows(rows)
@@ -1401,7 +1593,10 @@ def render_report(
                 "| --- | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
-        for baseline in (*BASIC_BASELINES, *STRONG_BASELINES):
+        for baseline in (
+            *HISTORICAL_BASIC_BASELINES,
+            *HISTORICAL_STRONG_BASELINES,
+        ):
             values = _comparison_counts(populations, baseline)
             lines.append(
                 f"| {baseline} | {values['wins']} | "
@@ -1420,7 +1615,7 @@ def render_report(
                 "dependent_triples_selected"
             )
             references = [
-                methods.get(name) for name in STRONG_BASELINES
+                methods.get(name) for name in HISTORICAL_STRONG_BASELINES
             ]
             references = [
                 value for value in references if _eligible(value)
@@ -1492,6 +1687,12 @@ def render_report(
         ]
     )
     return "\n".join(lines)
+
+
+def render_report(
+    rows: list[dict[str, Any]], results_path: Path
+) -> str:
+    return render_comparison_report(rows, results_path)
 
 
 def write_report(

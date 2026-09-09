@@ -23,6 +23,7 @@ class EvaluatedAlternative:
     lowered_verification: LoweredVerificationResult | None = None
     resources: ResourceRecord | None = None
     failure_reason: str | None = None
+    constraint_failure: str | None = None
 
     @property
     def eligible(self) -> bool:
@@ -46,6 +47,10 @@ class EvaluatedAlternative:
             self.resources.peak_workspace,
         )
 
+    @property
+    def feasible(self) -> bool:
+        return self.eligible and self.constraint_failure is None
+
     def summary(self) -> dict[str, Any]:
         return {
             "label": self.label,
@@ -60,8 +65,10 @@ class EvaluatedAlternative:
                 else self.lowered_verification.status
             ),
             "eligible": self.eligible,
+            "feasible": self.feasible,
             "resource_tuple": self.resource_tuple,
             "failure_reason": self.failure_reason or self.candidate.failure_reason,
+            "constraint_failure": self.constraint_failure,
         }
 
     def artifact(self) -> dict[str, Any]:
@@ -94,6 +101,61 @@ class SelectionResult:
     lowered_verification: LoweredVerificationResult
     alternatives: list[EvaluatedAlternative]
     nondominated_labels: list[str]
+    limits: "SelectionLimits"
+
+
+@dataclass(frozen=True)
+class SelectionLimits:
+    t_count: int | None = None
+    t_depth: int | None = None
+    ancilla: int | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("t_count", "t_depth", "ancilla"):
+            value = getattr(self, name)
+            if value is not None and (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                raise ValueError(f"{name} limit must be a non-negative integer or null")
+
+    @classmethod
+    def from_value(
+        cls, value: "SelectionLimits | dict[str, int | None] | None"
+    ) -> "SelectionLimits":
+        if value is None:
+            return cls()
+        if isinstance(value, cls):
+            return value
+        unknown = set(value) - {"t_count", "t_depth", "ancilla"}
+        if unknown:
+            raise ValueError(f"unknown selection limits: {sorted(unknown)}")
+        return cls(**value)
+
+    def to_dict(self) -> dict[str, int | None]:
+        return {
+            "t_count": self.t_count,
+            "t_depth": self.t_depth,
+            "ancilla": self.ancilla,
+        }
+
+    def violation(self, resources: ResourceRecord) -> str | None:
+        checks = (
+            ("t_count", resources.t_count, self.t_count),
+            ("t_depth", resources.t_depth, self.t_depth),
+            ("ancilla", resources.peak_workspace, self.ancilla),
+        )
+        failures = [
+            f"{name}={actual} exceeds {limit}"
+            for name, actual, limit in checks
+            if limit is not None and actual > limit
+        ]
+        return ", ".join(failures) or None
+
+
+class NoFeasibleAlternativeError(RuntimeError):
+    """Raised when valid alternatives exist but every one violates a hard limit."""
 
 
 def _dominates(first: tuple[int, int, int], second: tuple[int, int, int]) -> bool:
@@ -125,6 +187,13 @@ def _rank(item: EvaluatedAlternative, objective: str) -> tuple:
             resources.t_depth,
             resources.t_count,
             resources.peak_workspace,
+            item.label,
+        )
+    if objective == "ancilla":
+        return (
+            resources.peak_workspace,
+            resources.t_count,
+            resources.t_depth,
             item.label,
         )
     return (
@@ -177,7 +246,11 @@ def select_lowered_candidate(
     selected_method: str,
     objective: str,
     preferred_method: str | None = None,
+    limits: SelectionLimits | dict[str, int | None] | None = None,
 ) -> SelectionResult:
+    if objective not in {"t_count", "t_depth", "ancilla", "pareto"}:
+        raise ValueError(f"unsupported selection objective {objective!r}")
+    normalized_limits = SelectionLimits.from_value(limits)
     alternatives = evaluate_alternatives(candidates, total_error, synthesizer)
     eligible = [item for item in alternatives if item.eligible]
     if not eligible:
@@ -185,9 +258,18 @@ def select_lowered_candidate(
             f"{item.label}: {item.failure_reason}" for item in alternatives
         )
         raise RuntimeError(f"no eligible emitted alternative: {reasons}")
+    for item in eligible:
+        assert item.resources is not None
+        item.constraint_failure = normalized_limits.violation(item.resources)
+    feasible = [item for item in eligible if item.feasible]
+    if not feasible:
+        reasons = "; ".join(
+            f"{item.label}: {item.constraint_failure}" for item in eligible
+        )
+        raise NoFeasibleAlternativeError(f"no feasible alternative: {reasons}")
     if objective == "pareto" and preferred_method is not None:
         preferred = [
-            item for item in eligible if item.candidate.method == preferred_method
+            item for item in feasible if item.candidate.method == preferred_method
         ]
         chosen = None
         for item in sorted(preferred, key=lambda value: _rank(value, "t_count")):
@@ -197,22 +279,26 @@ def select_lowered_candidate(
                 or other.resource_tuple is None
                 or _dominates(item.resource_tuple, other.resource_tuple)
                 or item.resource_tuple == other.resource_tuple
-                for other in eligible
+                for other in feasible
             ):
                 chosen = item
                 break
         if chosen is None:
             nonpreferred = [
-                item for item in eligible if item.candidate.method != preferred_method
+                item for item in feasible if item.candidate.method != preferred_method
             ]
-            chosen = min(nonpreferred or eligible, key=lambda value: _rank(value, "t_count"))
+            chosen = min(
+                nonpreferred or feasible,
+                key=lambda value: _rank(value, "t_count"),
+            )
     else:
-        chosen = min(eligible, key=lambda value: _rank(value, objective))
+        chosen = min(feasible, key=lambda value: _rank(value, objective))
 
     nondominated = _nondominated(alternatives)
     selection_trace = {
         "action": "full_circuit_objective_selection",
         "objective": objective,
+        "limits": normalized_limits.to_dict(),
         "selected": chosen.label,
         "nondominated": nondominated,
         "alternatives": [item.summary() for item in alternatives],
@@ -225,6 +311,7 @@ def select_lowered_candidate(
         parameters={
             **chosen.candidate.parameters,
             "selection_objective": objective,
+            "selection_limits": normalized_limits.to_dict(),
             "selection_alternatives": [item.summary() for item in alternatives],
             "nondominated_alternatives": nondominated,
         },
@@ -247,4 +334,5 @@ def select_lowered_candidate(
         lowered_verification=chosen.lowered_verification,
         alternatives=alternatives,
         nondominated_labels=nondominated,
+        limits=normalized_limits,
     )

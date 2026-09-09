@@ -37,6 +37,8 @@ class TradeoffRecord:
     logical_toffoli_count: int
     logical_cx_count: int
     logical_x_count: int
+    arithmetic_t: int
+    rotation_t: int
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -46,6 +48,17 @@ def characterize_tradeoff(lowered: LoweredCircuit) -> TradeoffRecord:
     application = lowered.application_rotations
     preparation = lowered.preparation_rotations
     operations = lowered.candidate.operations
+    reuse = int(lowered.candidate.parameters.get("reuse_count", 1))
+    application_rotation_t = sum(item.t_count for item in application)
+    preparation_rotation_t = sum(item.t_count for item in preparation)
+    emitted_application_t = sum(
+        (1 if event.kind in {"t", "tdg"} else 0)
+        if isinstance(event, GateEvent)
+        else event.t_count
+        for event in lowered.events
+    )
+    rotation_t = preparation_rotation_t + reuse * application_rotation_t
+    arithmetic_t = reuse * (emitted_application_t - application_rotation_t)
     return TradeoffRecord(
         application_rotations=len(application),
         generic_application_rotations=sum(not item.exact for item in application),
@@ -56,6 +69,8 @@ def characterize_tradeoff(lowered: LoweredCircuit) -> TradeoffRecord:
         logical_toffoli_count=sum(item.kind == "toffoli" for item in operations),
         logical_cx_count=sum(item.kind == "cx" for item in operations),
         logical_x_count=sum(item.kind == "x" for item in operations),
+        arithmetic_t=arithmetic_t,
+        rotation_t=rotation_t,
     )
 
 
