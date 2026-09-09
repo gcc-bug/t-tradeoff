@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import cmath
+from functools import lru_cache
 import math
 
 import numpy as np
 
 from ..lowering import GateEvent, LoweredCircuit, MacroEvent
+from .core import verify_candidate
 
 
 ONE_QUBIT_GATES: dict[str, np.ndarray] = {
@@ -62,13 +64,38 @@ def _rotation_requests(lowered: LoweredCircuit) -> tuple[list, list]:
     return application, preparation
 
 
-def _validate_rotations(lowered: LoweredCircuit) -> str | None:
+def _allocated_tolerances(
+    lowered: LoweredCircuit, total_error: float
+) -> tuple[float, float]:
     application, preparation = _rotation_requests(lowered)
+    app_generic = sum(not angle.is_exact_clifford_t for angle in application)
+    prep_generic = sum(not angle.is_exact_clifford_t for angle in preparation)
+    reuse = int(lowered.candidate.parameters.get("reuse_count", 1))
+    if reuse < 1:
+        raise ValueError("rotation reuse count must be positive")
+    if prep_generic and app_generic:
+        return (
+            total_error / (2 * app_generic * reuse),
+            total_error / (2 * prep_generic),
+        )
+    if app_generic:
+        return total_error / (app_generic * reuse), total_error
+    if prep_generic:
+        return total_error, total_error / prep_generic
+    return total_error, total_error
+
+
+def _validate_rotations(lowered: LoweredCircuit, total_error: float) -> str | None:
+    application, preparation = _rotation_requests(lowered)
+    try:
+        app_tolerance, prep_tolerance = _allocated_tolerances(lowered, total_error)
+    except ValueError as exc:
+        return str(exc)
     pairs = (
-        ("application", application, lowered.application_rotations),
-        ("preparation", preparation, lowered.preparation_rotations),
+        ("application", application, lowered.application_rotations, app_tolerance),
+        ("preparation", preparation, lowered.preparation_rotations, prep_tolerance),
     )
-    for label, requests, results in pairs:
+    for label, requests, results, allocated_tolerance in pairs:
         if len(requests) != len(results):
             return f"{label} rotation count mismatch"
         for request, result in zip(requests, results, strict=True):
@@ -84,6 +111,22 @@ def _validate_rotations(lowered: LoweredCircuit) -> str | None:
                 return f"{label} rotation contains a non-finite value"
             if result.tolerance <= 0 or result.requested_error <= 0:
                 return f"{label} rotation has a nonpositive tolerance"
+            if not math.isclose(
+                result.tolerance, allocated_tolerance, rel_tol=1e-12, abs_tol=1e-15
+            ):
+                return (
+                    f"{label} rotation tolerance does not match the "
+                    "whole-circuit allocation"
+                )
+            if not math.isclose(
+                result.requested_error,
+                allocated_tolerance,
+                rel_tol=1e-12,
+                abs_tol=1e-15,
+            ):
+                return (
+                    f"{label} rotation requested error does not match its allocation"
+                )
             if result.actual_operator_error < 0:
                 return f"{label} rotation has a negative error"
             if set(result.gates) - SYNTHESIS_GATES:
@@ -134,7 +177,10 @@ def _validate_events(lowered: LoweredCircuit) -> str | None:
         expected_arity = 2 if event.kind == "cx" else 1
         if event.kind not in ONE_QUBIT_GATES and event.kind != "cx":
             return f"unsupported emitted gate {event.kind!r}"
-        if len(event.qubits) != expected_arity or len(set(event.qubits)) != expected_arity:
+        if (
+            len(event.qubits) != expected_arity
+            or len(set(event.qubits)) != expected_arity
+        ):
             return f"invalid wires for emitted gate {event.kind!r}"
         if any(qubit < 0 or qubit >= total_qubits for qubit in event.qubits):
             return f"out-of-range wire for emitted gate {event.kind!r}"
@@ -162,6 +208,105 @@ def _apply_cx(state: np.ndarray, control: int, target: int) -> None:
     values = state[left].copy()
     state[left] = state[right]
     state[right] = values
+
+
+TOFFOLI_DECOMPOSITION = (
+    GateEvent("h", (2,)),
+    GateEvent("cx", (1, 2)),
+    GateEvent("tdg", (2,)),
+    GateEvent("cx", (0, 2)),
+    GateEvent("t", (2,)),
+    GateEvent("cx", (1, 2)),
+    GateEvent("tdg", (2,)),
+    GateEvent("cx", (0, 2)),
+    GateEvent("t", (1,)),
+    GateEvent("t", (2,)),
+    GateEvent("h", (2,)),
+    GateEvent("cx", (0, 1)),
+    GateEvent("t", (0,)),
+    GateEvent("tdg", (1,)),
+    GateEvent("cx", (0, 1)),
+)
+
+
+@lru_cache(maxsize=1)
+def _toffoli_decomposition_error() -> float:
+    actual = np.eye(8, dtype=np.complex128)
+    for event in TOFFOLI_DECOMPOSITION:
+        if event.kind == "cx":
+            _apply_cx(actual, event.qubits[0], event.qubits[1])
+        else:
+            _apply_one_qubit(actual, ONE_QUBIT_GATES[event.kind], event.qubits[0])
+    target = np.eye(8, dtype=np.complex128)
+    target[[3, 7], :] = target[[7, 3], :]
+    return float(np.linalg.norm(target - actual, ord=2))
+
+
+def _toffoli_events(qubits: tuple[int, ...]) -> list[GateEvent]:
+    first, second, target = qubits
+    mapping = {0: first, 1: second, 2: target}
+    return [
+        GateEvent(event.kind, tuple(mapping[qubit] for qubit in event.qubits))
+        for event in TOFFOLI_DECOMPOSITION
+    ]
+
+
+def _expected_emitted_stream(
+    lowered: LoweredCircuit,
+) -> tuple[list[GateEvent] | None, float, str | None]:
+    expected: list[GateEvent] = []
+    expected_phase = 0.0
+    rotations = iter(lowered.application_rotations)
+    for operation in lowered.candidate.operations:
+        if operation.kind in {"x", "cx"}:
+            expected.append(GateEvent(operation.kind, operation.qubits))
+        elif operation.kind in {"toffoli", "and_compute", "and_uncompute"}:
+            if (
+                lowered.candidate.model_profile != "unitary_clifford_t"
+                and operation.kind != "toffoli"
+            ):
+                return (
+                    None,
+                    expected_phase,
+                    "measurement-assisted primitives lack channel evidence",
+                )
+            expected.extend(_toffoli_events(operation.qubits))
+        elif operation.kind == "phase":
+            try:
+                synthesis = next(rotations)
+            except StopIteration:
+                return (
+                    None,
+                    expected_phase,
+                    "event binding ran out of rotation evidence",
+                )
+            for gate in synthesis.gates:
+                if gate == "w":
+                    expected_phase += math.pi / 4
+                else:
+                    expected.append(GateEvent(gate, (operation.qubits[0],)))
+            if not synthesis.exact:
+                request = lowered.candidate.program.angle_map[
+                    operation.angle_id
+                ].scaled(operation.multiplier)
+                expected_phase += synthesis.circuit_global_phase + request.radians / 2
+        else:
+            return (
+                None,
+                expected_phase,
+                f"primitive {operation.kind!r} lacks emitted evidence",
+            )
+    try:
+        next(rotations)
+    except StopIteration:
+        pass
+    else:
+        return (
+            None,
+            expected_phase,
+            "event binding did not consume all rotation evidence",
+        )
+    return expected, expected_phase, None
 
 
 def _dense_isometry_error(lowered: LoweredCircuit) -> float:
@@ -216,7 +361,7 @@ def verify_lowered_circuit(
             "verification_failure", "validation", None, lowered.error_bound,
             False, 0, memory_cap_bytes, event_error
         )
-    rotation_error = _validate_rotations(lowered)
+    rotation_error = _validate_rotations(lowered, total_error)
     if rotation_error:
         return LoweredVerificationResult(
             "verification_failure", "validation", None, lowered.error_bound,
@@ -245,6 +390,44 @@ def verify_lowered_circuit(
             False, 0, memory_cap_bytes,
             "macro events are excluded from emitted-circuit verification",
         )
+    if lowered.error_metric != "operator_norm_telescoping":
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported", "error_contract", None, recomputed_bound,
+            True, 0, memory_cap_bytes, "unsupported whole-circuit error metric",
+        )
+    if _toffoli_decomposition_error() > 1e-10:
+        return LoweredVerificationResult(
+            "verification_failure", "primitive_decomposition", None, recomputed_bound,
+            True, 0, memory_cap_bytes, "independent Toffoli decomposition check failed",
+        )
+    ideal = verify_candidate(lowered.candidate)
+    if ideal.status != "verified_ideal_semantics":
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported", "ideal_construction", None, recomputed_bound,
+            True, 0, memory_cap_bytes,
+            f"ideal construction evidence is insufficient: {ideal.status}",
+        )
+    expected_events, expected_phase, binding_error = _expected_emitted_stream(lowered)
+    if binding_error is not None:
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported", "primitive_binding", None, recomputed_bound,
+            True, 0, memory_cap_bytes, binding_error,
+        )
+    if expected_events != lowered.events:
+        return LoweredVerificationResult(
+            "verification_failure", "emitted_event_binding", None, recomputed_bound,
+            True, 0, memory_cap_bytes,
+            "emitted event stream does not match the independently reconstructed composition",
+        )
+    phase_distance = abs(
+        cmath.exp(1j * expected_phase) - cmath.exp(1j * lowered.lowering_global_phase)
+    )
+    if phase_distance > 1e-10:
+        return LoweredVerificationResult(
+            "verification_failure", "emitted_event_binding", None, recomputed_bound,
+            True, 0, memory_cap_bytes,
+            "lowering global phase does not match the emitted rotation subsequences",
+        )
     data_size = 1 << lowered.candidate.program.qubit_count
     full_size = 1 << (
         lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
@@ -254,13 +437,13 @@ def verify_lowered_circuit(
     if allocation_estimate > memory_cap_bytes:
         return LoweredVerificationResult(
             "verified_lowered_compositional",
-            "emitted_replay_and_compositional_error",
+            "ideal_semantics_primitive_matrices_event_binding_and_error_budget",
             None,
             recomputed_bound,
             True,
             matrix_bytes,
             memory_cap_bytes,
-            "dense isometry skipped because its preflight estimate exceeds the memory cap",
+            "dense isometry skipped; independent compositional obligations were verified",
         )
     error = _dense_isometry_error(lowered)
     if not math.isfinite(error) or error > total_error * (1 + 1e-7) + 1e-10:

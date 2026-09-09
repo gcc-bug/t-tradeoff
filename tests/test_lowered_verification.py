@@ -40,6 +40,10 @@ def test_lowered_verifier_rejects_t_to_t_dagger_mutation():
         lowered, index, GateEvent("tdg", lowered.events[index].qubits)
     )
     assert verify_lowered_circuit(mutated, 1e-4).status == "verification_failure"
+    assert (
+        verify_lowered_circuit(mutated, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
 
 
 def test_lowered_verifier_rejects_reversed_cnot_and_missing_cleanup():
@@ -57,6 +61,10 @@ def test_lowered_verifier_rejects_reversed_cnot_and_missing_cleanup():
         verify_lowered_circuit(reversed_cx, 1e-4).status
         == "verification_failure"
     )
+    assert (
+        verify_lowered_circuit(reversed_cx, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
     missing_cleanup = replace(
         lowered,
         events=[
@@ -69,6 +77,10 @@ def test_lowered_verifier_rejects_reversed_cnot_and_missing_cleanup():
         verify_lowered_circuit(missing_cleanup, 1e-4).status
         == "verification_failure"
     )
+    assert (
+        verify_lowered_circuit(missing_cleanup, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
 
 
 def test_lowered_verifier_rejects_global_phase_and_nan_mutations():
@@ -78,6 +90,10 @@ def test_lowered_verifier_rejects_global_phase_and_nan_mutations():
         lowering_global_phase=lowered.lowering_global_phase + 0.1,
     )
     assert verify_lowered_circuit(shifted, 1e-4).status == "verification_failure"
+    assert (
+        verify_lowered_circuit(shifted, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
     nan_error = replace(lowered, error_bound=math.nan)
     assert verify_lowered_circuit(nan_error, 1e-4).status == "verification_failure"
 
@@ -103,3 +119,40 @@ def test_dense_preflight_uses_compositional_scope_without_allocating():
     )
     assert result.status == "verified_lowered_compositional"
     assert result.operator_norm_error is None
+
+
+def test_exact_t_to_t_dagger_reproducer_fails_in_forced_compositional_mode():
+    program = make_program("exact", 1, [1], AngleBinding("theta", "pi/4"))
+    candidate = compile_independent(
+        program, CompilationConstraints(0, "unitary_clifford_t")
+    )
+    lowered = lower_candidate(candidate, 1e-4, RotationSynthesizer())
+    assert lowered.events == [GateEvent("t", (0,))]
+    mutated = replace(lowered, events=[GateEvent("tdg", (0,))])
+    assert (
+        verify_lowered_circuit(mutated, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
+
+
+def test_forced_compositional_mode_rejects_altered_rotation_metadata():
+    lowered = _generic_lowered()
+    rotations = list(lowered.application_rotations)
+    rotations[0] = replace(
+        rotations[0], requested_error=rotations[0].requested_error / 2
+    )
+    mutated = replace(lowered, application_rotations=rotations)
+    assert (
+        verify_lowered_circuit(mutated, 1e-4, memory_cap_bytes=1).status
+        == "verification_failure"
+    )
+
+
+def test_compositional_status_requires_validated_ideal_construction():
+    program = make_program("large", 11, [1], AngleBinding("theta", "pi/4"))
+    candidate = compile_independent(
+        program, CompilationConstraints(0, "unitary_clifford_t")
+    )
+    lowered = lower_candidate(candidate, 1e-4, RotationSynthesizer())
+    result = verify_lowered_circuit(lowered, 1e-4, memory_cap_bytes=1)
+    assert result.status == "lowered_evidence_unsupported"
