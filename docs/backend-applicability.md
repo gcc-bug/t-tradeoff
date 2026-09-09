@@ -19,3 +19,8 @@ unknown result is not selectable.
 The working alternatives are sufficient to test exact count/depth scheduling.
 They do not yet provide an optimizer-created workspace allocation alternative;
 workspace variation currently comes from the audited HWP construction seeds.
+
+On the synthetic development witness, PyZX optimization of the cap-4 HWP seed
+changes `(190,73,7)` to `(176,114,7)`. Adaptive lookahead and the fixed-order
+ablation both reach that endpoint, so this demonstrates an enabling
+representation change but not an adaptive-priority advantage.

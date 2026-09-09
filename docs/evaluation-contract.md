@@ -24,9 +24,12 @@ competitive strength.
 | `macro_not_verified` | Ineligible; a formula-level or measured macro remains |
 | failure or unavailable | Ineligible |
 
-Schema-v2 replay reconstructs the target, candidate, rotations, emitted stream,
-error bound, tradeoff decomposition, resources, evidence metadata, limits, and
-selection artifacts. Hash integrity alone does not qualify evidence.
+Schema-v3 runs pair each result row with a checksummed circuit artifact. During
+execution, construction and lowered semantics are verified and every accepted
+external result is checked against its source. Stored-result verification
+checks schema, row/artifact identity, checksum, recorded verification status,
+error and resource limits, and finite metrics; it does not claim to re-execute
+an external backend.
 
 ## Generation And Selection
 
@@ -34,27 +37,30 @@ Direct and shared-parity candidates are generated once. Ordinary HWP generates
 documented batch limits from one through the configured cap and reevaluates
 each full circuit with its actual rotation count under the same total error.
 
-The selector retains every eligible nondominated `(T, T-depth, ancilla)` point.
+The search archive retains eligible nondominated `(T, T-depth, ancilla)` points.
 Hard T-count, T-depth, and ancilla limits are applied without relaxation. If no
-candidate passes them, the result is `no feasible alternative`. The supported
-objectives and tie-breaks are:
+candidate passes them, the result is explicitly infeasible. Supported final
+objectives are:
 
 | Objective | Tie-break |
 | --- | --- |
 | `t_count` | T-depth, ancillas, stable ID |
 | `t_depth` | T-count, ancillas, stable ID |
 | `ancilla` | T-count, T-depth, stable ID |
+| normalized balance | score, T-count, T-depth, ancillas, stable ID |
 
-Weighted sums and compilation time are not optimization objectives.
+The normalized balance uses fixed positive configured references and
+nonnegative weights. Backend time is a budget/accounting field, not an
+optimization objective.
 
 ## Reporting
 
-Rows report method and variant, generic rotations, arithmetic T, rotation T,
-total T, scheduled T-depth, peak ancillas, synthesis error, verification scope,
-and evidence provenance. Scheduling uses the emitted dependency stream; stage
-depths are not added separately.
+Rows report the selected implementation, total T, scheduled T-depth, peak
+allocated workspace, objective value, synthesis error, verification scope,
+backend calls/time, rejection counts, decision trace, and Pareto endpoints.
+Scheduling uses the emitted dependency stream; stage depths are not added.
 
 The default study separates explanatory, negative-control, and public
-development inputs. The QED-C cases are not held-out evidence. ANF,
-dependent-triple, legacy, measured, catalytic, and unavailable methods do not
-enter the default comparison.
+development inputs. The QED-C and adaptive synthetic cases are not held-out
+evidence. Removed, measured, catalytic, and unavailable methods do not enter the
+comparison.

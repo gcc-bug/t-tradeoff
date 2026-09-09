@@ -53,13 +53,13 @@ garbage, carry wires, stage widths, forward and cleanup Toffolis, rotations,
 and the source. Tests exhaust primitive truth tables and full population-count
 computation/inversion for sizes 1-8, including non-powers of two.
 
-## ANF Reference
+## Historical ANF Reference
 
-`population_count_compute` is now explicitly a small correctness reference,
-capped at eight inputs. It enumerates elementary-symmetric monomials and is not
-ordinary HWP arithmetic. Its observed forward Toffoli counts of 3 at size 3
-and 391 at size 8 remain code observations, not bounds. It is excluded from the
-default configuration and evidence ranking.
+The removed `population_count_compute` implementation enumerated
+elementary-symmetric monomials and was not ordinary HWP arithmetic. Its observed
+forward Toffoli counts of 3 at size 3 and 391 at size 8 remain historical code
+observations, not bounds. Git history preserves the implementation; it is not
+an active competitor.
 
 ## Scope Limits
 
