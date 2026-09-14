@@ -185,9 +185,9 @@ def estimate_resources(lowered: LoweredCircuit) -> ResourceRecord:
         lowered.candidate.program.qubit_count
         + lowered.candidate.workspace_qubits
     )
-    allocated_qubits = lowered.allocated_qubits or declared_qubits
-    if not lowered.candidate.program.qubit_count <= allocated_qubits <= declared_qubits:
-        raise ValueError("allocated qubits must include data and fit the declared circuit")
+    allocated_qubits = lowered.allocated_qubits if lowered.allocated_qubits is not None else declared_qubits
+    if allocated_qubits < lowered.candidate.program.qubit_count:
+        raise ValueError("allocated qubits must include data")
     return ResourceRecord(
         t_count=t_count,
         t_depth=t_depth,

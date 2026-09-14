@@ -24,8 +24,11 @@ assumptions are retained in the historical reports and HWP/prior-work audits.
 Each Clifford operation propagates the maximum dependency level of all touched
 qubits without increasing it. Each `T` or `T-dagger` increments the level. A
 reverse pass records T-critical events and slack. Peak additional logical
-qubits comes from wires actually allocated in the lowered circuit, including
-optimizer outputs, rather than a candidate's declared maximum alone.
+qubits comes from the current emitted implementation's declared allocation,
+including optimizer-added clean scratch, rather than a construction's declared
+maximum alone. This is allocated logical workspace, not a time-indexed count
+of dirty ancillas. A phase-region action must use and clean every added wire;
+no idle-wire inference or general register-lifetime analysis is implemented.
 
 ## Error allocation
 

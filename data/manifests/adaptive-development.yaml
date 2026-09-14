@@ -1,17 +1,48 @@
 schema_version: 1
 selection_rule: >-
-  Two predeclared synthetic development cases: one equal-angle mechanism witness
-  and one weighted negative control. Neither is held-out evidence.
+  One exact ancilla diagnostic, an HWP witness, an overlapping phase case, a
+  checksum-pinned development graph, and a negative control. Angles are
+  predeclared per case. None is held-out evidence.
 cases:
+  - id: exact_ccz_phase_diagnostic
+    stratum: synthetic_diagnostic
+    angle_ids: [theta_exact]
+    loader: generated_masks
+    masks: [1, 2, 4, 3, 5, 6, 7]
+    coefficients: [1, 1, 1, -1, -1, -1, 1]
+    qubit_count: 3
+    seed: 0
+    complete_workload: false
   - id: hwp_joint_optimization_witness
     stratum: explanatory
+    angle_ids: [theta_0173]
     loader: generated_masks
     masks: [1, 2, 4, 8]
     qubit_count: 4
     seed: 0
     complete_workload: false
+  - id: overlapping_phase_dependencies
+    stratum: explanatory
+    angle_ids: [theta_0173]
+    loader: generated_masks
+    masks: [3, 5, 6, 7]
+    qubit_count: 3
+    seed: 0
+    complete_workload: false
+  - id: qedc_small_phase_block
+    stratum: development
+    angle_ids: [theta_0173]
+    loader: maxcut_edgelist
+    local_path: data/raw/qedc/mc_004_003_000.txt
+    sha256: 28b8c06d893be9a6f5cff7524efde38749861cce15fa281b8a346a091ae9d658
+    source_url: https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_004_003_000.txt
+    license: Apache-2.0
+    source_revision: feb22a900d9d94d40e81bc1d25e149bd8f3cbc18
+    seed: 0
+    complete_workload: true
   - id: weighted_no_collective_group
     stratum: negative_control
+    angle_ids: [theta_0173]
     loader: generated_graph
     generator: weighted_path
     parameters: {n: 6}

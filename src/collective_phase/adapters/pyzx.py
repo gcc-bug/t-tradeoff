@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import json
+import multiprocessing
 import random
 import time
 
@@ -26,18 +27,64 @@ def _event_hash(lowered: LoweredCircuit) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _optimize_worker(connection, seed: int, lowered: LoweredCircuit, action: str) -> None:
+    try:
+        connection.send(PyZXAdapter(seed=seed)._optimize_direct(lowered, action))
+    except BaseException as exc:
+        connection.send(AdapterResult("pyzx", PYZX_REVISION, action, "failed", 0.0, reason=str(exc)))
+    finally:
+        connection.close()
+
+
 class PyZXAdapter:
     def __init__(self, *, seed: int = 0) -> None:
         self.seed = seed
 
-    def optimize(self, lowered: LoweredCircuit, action: str) -> AdapterResult:
+    def optimize(
+        self, lowered: LoweredCircuit, action: str, *, timeout_seconds: float | None = None
+    ) -> AdapterResult:
         if action not in PYZX_ACTIONS:
             raise ValueError(f"unsupported PyZX action {action!r}")
+        if timeout_seconds is None:
+            return self._optimize_direct(lowered, action)
         started = time.perf_counter()
-        declared_qubits = (
-            lowered.candidate.program.qubit_count
-            + lowered.candidate.workspace_qubits
+        if timeout_seconds <= 0:
+            return AdapterResult("pyzx", PYZX_REVISION, action, "timed_out", 0.0, reason="search deadline expired")
+        method = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
+        context = multiprocessing.get_context(method)
+        reader, writer = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_optimize_worker, args=(writer, self.seed, lowered, action)
         )
+        try:
+            process.start()
+            writer.close()
+            if reader.poll(timeout_seconds):
+                try:
+                    result = reader.recv()
+                except EOFError:
+                    result = AdapterResult("pyzx", PYZX_REVISION, action, "failed", 0.0, reason="worker exited without a result")
+                process.join(timeout=1)
+                return result
+            return AdapterResult(
+                "pyzx", PYZX_REVISION, action, "timed_out",
+                time.perf_counter() - started, reason="PyZX exceeded remaining search time",
+            )
+        finally:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+            reader.close()
+            writer.close()
+
+    def _optimize_direct(self, lowered: LoweredCircuit, action: str) -> AdapterResult:
+        started = time.perf_counter()
+        declared_qubits = lowered.allocated_qubits
+        if declared_qubits is None:
+            declared_qubits = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
         try:
             source = events_to_circuit(lowered.events, declared_qubits)
             random_state = random.getstate()

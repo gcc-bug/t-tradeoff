@@ -11,8 +11,8 @@ def _identity(row: dict[str, Any]) -> tuple[str, ...]:
         str(row.get("code_revision")),
         str(row.get("config_hash")),
         str(row.get("manifest_hash")),
+        str(row.get("backend_environment_hash")),
         json.dumps(row.get("objective"), sort_keys=True),
-        json.dumps(row.get("limits"), sort_keys=True),
     )
 
 
@@ -41,7 +41,7 @@ def _resources(row: dict[str, Any]) -> str:
 
 
 def _cell(value: Any) -> str:
-    return str(value).replace("|", "\\|")
+    return " ".join(str(value).split()).replace("|", "\\|")
 
 
 def _backend_summary(rows: list[dict[str, Any]]) -> list[str]:
@@ -70,7 +70,7 @@ def _comparison_counts(
     wins = ties = regressions = denominator = 0
     for rows in groups.values():
         adaptive = next(
-            (row for row in rows if row["policy"] == "adaptive_lookahead" and row["status"] == "success"),
+            (row for row in rows if row["policy"] == "adaptive" and row["status"] == "success"),
             None,
         )
         comparators = [
@@ -93,71 +93,44 @@ def _comparison_counts(
 
 
 def _adaptive_comparison(groups: dict[tuple, list[dict[str, Any]]]) -> str:
-    fixed_priority = {
-        row["policy"]
-        for rows in groups.values()
-        for row in rows
-        if row.get("policy", "").startswith("static_")
-    }
-    static = _comparison_counts(groups, fixed_priority)
-    nonadaptive = _comparison_counts(groups, fixed_priority | {"fixed_order"})
-    if not static[3]:
-        return "No matched adaptive/static comparison is available."
+    static = _comparison_counts(groups, {"static_t", "static_depth", "static_ancilla", "static_balanced"})
+    fixed = _comparison_counts(groups, {"fixed_count_depth", "fixed_depth_count"})
+    frozen = _comparison_counts(groups, {"frozen"})
     return (
-        f"Against the best fixed-priority endpoint, adaptive lookahead has {static[0]} "
-        f"wins, {static[1]} ties, and {static[2]} regressions on {static[3]} matched "
-        f"feasible cases. Against the best nonadaptive endpoint including fixed order, "
-        f"it has {nonadaptive[0]} wins, {nonadaptive[1]} ties, and {nonadaptive[2]} "
-        f"regressions on {nonadaptive[3]} cases. Backend calls are shown per row; the "
-        "static weight multi-start budget is split across its predeclared vectors."
+        f"Adaptive versus the combined static-preference portfolio: {static[0]} wins, "
+        f"{static[1]} ties, {static[2]} regressions on {static[3]} matched cases. "
+        f"Versus the fixed successive-sequence portfolio: {fixed[0]} wins, "
+        f"{fixed[1]} ties, {fixed[2]} regressions on {fixed[3]} cases. "
+        f"Versus frozen priorities: {frozen[0]} wins, {frozen[1]} ties, "
+        f"{frozen[2]} regressions on {frozen[3]} cases. Static and fixed "
+        "portfolios split the same total call budget; each policy sees the same roots and actions."
     )
-
-
-def _trace_improvement(row: dict[str, Any]) -> float:
-    trace = row.get("trace", [])
-    if not trace:
-        return float("-inf")
-    return float(trace[0]["j_before"]) - float(trace[-1]["j_after"])
 
 
 def _mechanism_conclusion(
     groups: dict[tuple, list[dict[str, Any]]], rows: list[dict[str, Any]]
 ) -> str:
-    enabling = any(
-        row.get("policy") == "adaptive_lookahead"
-        and len(row.get("trace", [])) >= 2
-        and row["trace"][0].get("provisional")
-        and row["trace"][0]["j_after"] > row["trace"][0]["j_before"]
-        and row["trace"][-1]["j_after"] < row["trace"][0]["j_before"]
-        for row in rows
+    ancilla_gain = any(
+        step.get("status") == "accepted" and step.get("a_after", 0) > step.get("a_before", 0)
+        and step.get("d_after", 0) < step.get("d_before", 0)
+        for row in rows for step in row.get("trace", [])
+        if step.get("action_backend") == "phase_ancilla:parallel_phase"
     )
-    fixed_priority = {
-        row["policy"]
-        for row in rows
-        if row.get("policy", "").startswith("static_")
-    }
-    nonadaptive = _comparison_counts(groups, fixed_priority | {"fixed_order"})
-    if not nonadaptive[3]:
-        return (
-            "No matched adaptive/static mechanism conclusion is available for "
-            "this run."
-        )
-    mechanism = (
-        "At least one accepted sequence crosses a temporarily worse construction "
-        "state before exact joint optimization improves the fixed final objective. "
-        if enabling
-        else "No accepted sequence demonstrates a temporarily worse enabling state. "
+    chained = any(
+        step.get("status") == "accepted" and "|" in step.get("parent_id", "")
+        for row in rows for step in row.get("trace", [])
     )
-    if nonadaptive[0] == 0:
-        return (
-            mechanism
-            + "The best nonadaptive policy matches or beats every adaptive endpoint, "
-            "so these rows do not establish an adaptive-priority advantage."
-        )
+    static = _comparison_counts(groups, {"static_t", "static_depth", "static_ancilla", "static_balanced"})
+    fixed = _comparison_counts(groups, {"fixed_count_depth", "fixed_depth_count"})
+    frozen = _comparison_counts(groups, {"frozen"})
     return (
-        mechanism
-        + f"Adaptive lookahead beats the best nonadaptive endpoint on {nonadaptive[0]} "
-        f"of {nonadaptive[3]} matched cases; independent evaluation is still required."
+        f"Ancilla-for-depth action observed: {'yes' if ancilla_gain else 'no'}. "
+        f"Verified successive transformations observed: {'yes' if chained else 'no'}. "
+        f"Adaptive beats the matched static portfolio in {static[0]}/{static[3]} "
+        f"and the matched fixed-sequence portfolio in {fixed[0]}/{fixed[3]} cases. "
+        f"Versus frozen priorities: {frozen[0]} wins, {frozen[1]} ties, "
+        f"{frozen[2]} regressions. "
+        "A workspace-release/reuse mechanism has not been established."
     )
 
 
@@ -169,8 +142,19 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
     groups: dict[tuple, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         groups[_case_key(row)].append(row)
+    for case_rows in groups.values():
+        if len({json.dumps(row.get("limits"), sort_keys=True) for row in case_rows}) > 1:
+            raise ValueError("result report mixes hard limits within a matched case")
     objective = rows[0].get("objective", {}) if rows else {}
-    limits = rows[0].get("limits", {}) if rows else {}
+    limits_by_workspace = {
+        str(row["workspace_budget"]): row.get("limits", {}) for row in rows
+    }
+    distinct_limits = {json.dumps(value, sort_keys=True) for value in limits_by_workspace.values()}
+    limits_description = (
+        f"Hard limits: `{next(iter(distinct_limits))}`."
+        if len(distinct_limits) == 1 else
+        f"Hard limits by workspace budget: `{json.dumps(limits_by_workspace, sort_keys=True)}`."
+    )
     lines = [
         "# Adaptive Resource Tradeoff Study",
         "",
@@ -181,7 +165,7 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
         f"Manifest hash: `{rows[0].get('manifest_hash', 'unknown') if rows else 'unknown'}`.",
         "",
         f"Fixed final objective: `{json.dumps(objective, sort_keys=True)}`. "
-        f"Hard limits: `{json.dumps(limits, sort_keys=True)}`.",
+        + limits_description,
         "",
         "## Integrated Methods",
         "",
@@ -192,30 +176,58 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
         "",
         "## Policy Outcomes",
         "",
-        "`Resources` is `(T, scheduled T-depth, peak allocated workspace)`. The "
+        "`Resources` is `(T, scheduled T-depth, allocated logical ancillas)`. The "
         "objective and tie-breaks remain fixed across every row.",
         "",
-        "| Case | Workspace budget | Policy | Status | Resources | J | Evaluations | Backend calls | Backend seconds |",
-        "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: |",
+        "| Case | Angle | Workspace budget | Policy | Status | Resources | J | Calls | Total seconds |",
+        "| --- | --- | ---: | --- | --- | --- | ---: | ---: | ---: |",
     ]
     for row in sorted(rows, key=_row_order):
         objective_value = row.get("objective_value")
         lines.append(
-            f"| {_cell(row.get('case_id', 'unknown'))} | {row.get('workspace_budget', 'n/a')} | "
+            f"| {_cell(row.get('case_id', 'unknown'))} | {_cell(row.get('angle_id', 'unknown'))} | {row.get('workspace_budget', 'n/a')} | "
             f"{_cell(row.get('policy', 'unknown'))} | "
             f"{row.get('status', 'unknown')} | {_resources(row)} | "
             f"{objective_value if objective_value is not None else 'n/a'} | "
-            f"{row.get('evaluations', 0)} | {row.get('backend_calls', 0)} | "
-            f"{float(row.get('backend_seconds', 0)):.6f} |"
+            f"{row.get('backend_calls', 0)} | {float(row.get('total_seconds', 0)):.3f} |"
         )
     lines.extend(["", _adaptive_comparison(groups), ""])
+
+    lines.extend([
+        "## Portfolio Cost",
+        "",
+        "Shared root preparation is counted once per portfolio; search wall time "
+        "includes backend, verification, scheduling, and controller work.",
+        "",
+        "| Case | Angle | Workspace budget | Portfolio | Calls | Wall seconds | Best J |",
+        "| --- | --- | ---: | --- | ---: | ---: | ---: |",
+    ])
+    for case_rows in groups.values():
+        sample = case_rows[0]
+        for label, names in (
+            ("adaptive", {"adaptive"}),
+            ("frozen", {"frozen"}),
+            ("static combined", {"static_t", "static_depth", "static_ancilla", "static_balanced"}),
+            ("fixed combined", {"fixed_count_depth", "fixed_depth_count"}),
+        ):
+            members = [row for row in case_rows if row.get("policy") in names]
+            if not members:
+                continue
+            roots = max(float(row.get("root_seconds", 0)) for row in members)
+            seconds = roots + sum(float(row.get("search_seconds", 0)) for row in members)
+            values = [float(row["objective_value"]) for row in members if row.get("status") == "success"]
+            lines.append(
+                f"| {_cell(sample['case_id'])} | {_cell(sample['angle_id'])} | "
+                f"{sample['workspace_budget']} | {label} | "
+                f"{sum(row.get('backend_calls', 0) for row in members)} | {seconds:.3f} | "
+                f"{min(values) if values else 'n/a'} |"
+            )
 
     lines.extend(
         [
             "## Paired Optimization",
             "",
-            "These are accepted backend steps only; construction-seed transitions "
-            "are listed separately in the decision trace.",
+            "Accepted steps on each selected circuit's parent chain.",
             "",
             "| Case | Workspace budget | Policy | Backend action | Before | After |",
             "| --- | ---: | --- | --- | --- | --- |",
@@ -223,14 +235,23 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
     )
     accepted = 0
     for row in sorted(rows, key=_row_order):
-        for step in row.get("trace", []):
-            if step.get("provisional"):
-                continue
+        by_output = {
+            step.get("output_id"): step for step in row.get("trace", [])
+            if step.get("status") in {"accepted", "unchanged"}
+        }
+        selected = row.get("selected") or {}
+        chain = []
+        current = selected.get("label")
+        while current in by_output:
+            step = by_output[current]
+            chain.append(step)
+            current = step.get("parent_id")
+        for step in reversed(chain):
             accepted += 1
             before = f"({step['t_before']}, {step['d_before']}, {step['a_before']})"
             after = f"({step['t_after']}, {step['d_after']}, {step['a_after']})"
             lines.append(
-                f"| {_cell(row['case_id'])} | {row.get('workspace_budget', 'n/a')} | "
+                f"| {_cell(row['case_id'])} ({_cell(row.get('angle_id', ''))}) | {row.get('workspace_budget', 'n/a')} | "
                 f"{_cell(row['policy'])} | {_cell(step['action_backend'])} | "
                 f"{before} | {after} |"
             )
@@ -240,57 +261,84 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
     trace_rows = [
         row
         for row in rows
-        if row.get("policy") == "adaptive_lookahead" and row.get("trace")
+        if row.get("policy") == "adaptive" and row.get("trace")
     ]
-    trace_row = max(trace_rows, key=_trace_improvement, default=None)
+    trace_row = max(
+        trace_rows,
+        key=lambda row: (
+            any(step.get("a_after", 0) > step.get("a_before", 0) for step in row["trace"]),
+            any("|" in step.get("parent_id", "") for step in row["trace"]),
+            -float(row.get("objective_value") or float("inf")),
+        ), default=None,
+    )
+    trace_case = (
+        "No adaptive case has an attempt trace."
+        if trace_row is None else
+        f"Case: `{trace_row['case_id']}`, workspace budget: `{trace_row['workspace_budget']}`."
+    )
     lines.extend(
         [
             "",
             "## Decision Trace",
             "",
-            "| Step | Region | Action/backend | Reason | Priority | T | D | A | J | Evaluations | Seconds | State |",
-            "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |",
+            "Attempt log for one adaptive case, recorded when each decision occurred. "
+            "`P` lists current count/depth/ancilla pressure plus objective weights.",
+            "",
+            trace_case,
+            "",
+            "| Step | Parent | Region | Action | Scratch | P | Priority and reason | T | D | A | J | Seconds | Status |",
+            "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | ---: | --- |",
         ]
     )
     if trace_row is None:
-        lines.append("| 0 | n/a | none | no accepted adaptive action | 0 | n/a | n/a | n/a | n/a | 0 | 0 | final |")
+        lines.append("| 0 | n/a | n/a | none | 0 | n/a | no adaptive attempt | n/a | n/a | n/a | n/a | 0 | none |")
     else:
         for step in trace_row["trace"]:
             lines.append(
-                f"| {step['step']} | {_cell(step['region'])} | "
-                f"{_cell(step['action_backend'])} | {_cell(step['reason'])} | "
-                f"{step['local_priority']:.4f} | "
+                f"| {step['step']} | {_cell(step.get('parent_id', ''))} | {_cell(step['region'])} | "
+                f"{_cell(step['action_backend'])} | {step.get('allowance', 0)} | "
+                f"{_cell(str(tuple(round(value, 3) for value in step.get('priority_vector', []))))} | "
+                f"{step['local_priority']:.4f}: {_cell(step['reason'].splitlines()[0])} | "
                 f"{step['t_before']} -> {step['t_after']} | "
                 f"{step['d_before']} -> {step['d_after']} | "
                 f"{step['a_before']} -> {step['a_after']} | "
                 f"{step['j_before']:.6g} -> {step['j_after']:.6g} | "
-                f"{step['evaluations']} | {step['backend_seconds']:.6f} | "
-                f"{'provisional' if step['provisional'] else 'accepted'} |"
+                f"{step['backend_seconds']:.3f} | {step.get('status', 'unknown')} |"
             )
 
-    pareto: dict[tuple[str, int, int, int, int], set[str]] = defaultdict(set)
+    pareto: dict[tuple[str, str, int, int, int, int], set[str]] = defaultdict(set)
     for row in rows:
         for point in row.get("pareto", []):
             resources = tuple(point["resources"])
-            key = (row["case_id"], row["workspace_budget"], *resources)
+            key = (row["case_id"], row.get("angle_id", ""), row["workspace_budget"], *resources)
             pareto[key].add(point["label"])
     lines.extend(
         [
             "",
             "## Final Pareto Points",
             "",
-            "| Case | Workspace budget | T | D | A | Implementations |",
-            "| --- | ---: | ---: | ---: | ---: | --- |",
+            "Each policy row's checksummed circuit artifact contains emitted gates and "
+            "a replayable proof chain for every listed alternative.",
+            "",
+            "| Case | Angle | Workspace budget | T | D | A | Implementations |",
+            "| --- | --- | ---: | ---: | ---: | ---: | --- |",
         ]
     )
     for key, labels in sorted(pareto.items()):
-        case_id, workspace, t_count, t_depth, ancilla = key
+        case_id, angle_id, workspace, t_count, t_depth, ancilla = key
+        if any(
+            other[:3] == key[:3]
+            and all(left <= right for left, right in zip(other[3:], key[3:], strict=True))
+            and any(left < right for left, right in zip(other[3:], key[3:], strict=True))
+            for other in pareto
+        ):
+            continue
         lines.append(
-            f"| {_cell(case_id)} | {workspace} | {t_count} | {t_depth} | {ancilla} | "
-            f"{_cell(', '.join(sorted(labels)))} |"
+            f"| {_cell(case_id)} | {_cell(angle_id)} | {workspace} | {t_count} | {t_depth} | {ancilla} | "
+            f"{_cell(', '.join(sorted(labels)[:3]))} |"
         )
     if not pareto:
-        lines.append("| n/a | n/a | n/a | n/a | n/a | no verified point |")
+        lines.append("| n/a | n/a | n/a | n/a | n/a | n/a | no verified point |")
 
     lines.extend(
         [

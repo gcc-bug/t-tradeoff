@@ -1,5 +1,7 @@
 from dataclasses import replace
 import math
+import multiprocessing
+import time
 
 import pytest
 
@@ -102,6 +104,21 @@ def test_dense_preflight_uses_compositional_scope_without_allocating():
     )
     assert result.status == "verified_lowered_compositional"
     assert result.operator_norm_error is None
+
+
+def test_external_proof_worker_enforces_deadline(monkeypatch):
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("worker monkeypatch requires fork")
+    from collective_phase.verification import lowered as proof_module
+
+    source = _generic_lowered()
+    child = replace(source, optimization={"backend": "pyzx"})
+    monkeypatch.setattr(proof_module, "_verify_optimized_unbounded", lambda *args: time.sleep(2))
+    proof = proof_module.verify_optimized_lowered_circuit(
+        source, child, 1e-4, timeout_seconds=0.05,
+    )
+    assert proof.status == "lowered_evidence_unsupported"
+    assert proof.scope == "verification_timeout"
 
 
 def test_exact_t_to_t_dagger_reproducer_fails_in_forced_compositional_mode():

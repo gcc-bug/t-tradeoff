@@ -5,11 +5,26 @@ from pathlib import Path
 import pytest
 
 from collective_phase.experiments import (
+    _policy_budget,
+    _policy_seconds_budget,
     audit_configuration,
     render_report,
     run_experiments,
     verify_result_rows,
 )
+
+
+def test_static_and_fixed_portfolios_share_total_calls_and_time():
+    policies = [
+        "static_t", "static_depth", "static_ancilla", "static_balanced",
+        "fixed_count_depth", "fixed_depth_count", "adaptive", "frozen",
+    ]
+    search = {"backend_call_budget": 12, "backend_seconds_budget": 60}
+    for members in (policies[:4], policies[4:6]):
+        assert sum(_policy_budget(policy, policies, search) for policy in members) == 12
+        assert sum(_policy_seconds_budget(policy, policies, search) for policy in members) == 60
+    assert _policy_budget("adaptive", policies, search) == 12
+    assert _policy_seconds_budget("adaptive", policies, search) == 60
 
 
 @pytest.fixture
@@ -64,7 +79,7 @@ def test_runner_uses_one_policy_result_format_and_fixed_limits(study):
     root, config, rows = study
     assert len(rows) == 2
     assert {row["policy"] for row in rows} == set(config["policies"])
-    assert all(row["schema_version"] == 3 for row in rows)
+    assert all(row["schema_version"] == 4 for row in rows)
     assert all(
         row["objective"] == {"mode": "single", "metric": "t_count"}
         for row in rows
@@ -72,6 +87,18 @@ def test_runner_uses_one_policy_result_format_and_fixed_limits(study):
     assert all(row["peak_workspace"] == 0 for row in rows)
     verification = verify_result_rows(root / config["results_dir"], root)
     assert verification["status"] == "verified"
+
+
+def test_case_workspace_budget_caps_search_even_when_global_limit_is_larger(study):
+    root, config, _ = study
+    variant = dict(config, workspace_budgets=[0, 4], limits={"ancilla": 4})
+    rows = run_experiments(variant, force=True)
+
+    assert len(rows) == 4
+    for row in rows:
+        assert row["limits"]["ancilla"] == row["workspace_budget"]
+        assert row["peak_workspace"] <= row["workspace_budget"]
+    assert verify_result_rows(root / config["results_dir"], root)["status"] == "verified"
 
 
 def test_force_run_removes_stale_checkpoints_but_preserves_other_files(study):
@@ -105,6 +132,46 @@ def test_stored_consistency_rejects_mutated_artifact(study):
     assert any("checksum mismatch" in value for value in result["failures"])
 
 
+def test_result_replay_rejects_forged_chain_with_matching_checksum(study):
+    root, config, rows = study
+    row = next(value for value in rows if value["policy"] == "construction_only")
+    artifact_path = root / row["artifact_path"]
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    for event in artifact["verified_chain"][0]["events"]:
+        if event["kind"] == "t":
+            event["kind"] = "tdg"
+            break
+    else:
+        raise AssertionError("expected an exact T gate")
+    artifact["lowering"] = artifact["verified_chain"][0]
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    row["artifact_hash"] = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    (root / config["results_dir"] / f"{row['row_id']}.json").write_text(
+        json.dumps(row), encoding="utf-8",
+    )
+    verification = verify_result_rows(root / config["results_dir"], root)
+    assert verification["status"] == "verification_failure"
+    assert any("chain replay failed" in value for value in verification["failures"])
+
+
+def test_result_replay_rejects_forged_pareto_circuit_with_matching_checksum(study):
+    root, config, rows = study
+    row = next(value for value in rows if value["policy"] == "construction_only")
+    artifact_path = root / row["artifact_path"]
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    alternative = artifact["pareto_alternatives"][0]
+    alternative["verified_chain"][0]["events"][0]["kind"] = "tdg"
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    row["artifact_hash"] = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    (root / config["results_dir"] / f"{row['row_id']}.json").write_text(
+        json.dumps(row), encoding="utf-8",
+    )
+
+    verification = verify_result_rows(root / config["results_dir"], root)
+    assert verification["status"] == "verification_failure"
+    assert any("Pareto proof failed" in value for value in verification["failures"])
+
+
 def test_report_contains_policy_table_trace_and_pareto(study):
     _, _, rows = study
     report = render_report(rows, Path("results/test"))
@@ -125,19 +192,34 @@ def test_report_rejects_mixed_study_identities(study):
         render_report([rows[0], changed], Path("results/test"))
 
 
-def test_report_distinguishes_fixed_priority_and_fixed_order(study):
+def test_report_accepts_distinct_limits_for_distinct_workspace_budgets(study):
+    _, _, rows = study
+    zero = rows[0]
+    four = dict(
+        zero, workspace_budget=4,
+        limits={"t_count": None, "t_depth": None, "ancilla": 4},
+    )
+    report = render_report([zero, four], Path("results/test"))
+    assert "Hard limits by workspace budget" in report
+    assert "| one | theta | 0 |" in report
+    assert "| one | theta | 4 |" in report
+    with pytest.raises(ValueError, match="mixes hard limits within"):
+        render_report([zero, dict(four, workspace_budget=0)], Path("results/test"))
+
+
+def test_report_distinguishes_static_portfolio_and_fixed_sequences(study):
     _, _, rows = study
     base = rows[0]
     compared = [
         dict(base, policy="static_t", objective_value=2.0),
-        dict(base, policy="fixed_order", objective_value=1.0),
-        dict(base, policy="adaptive_lookahead", objective_value=1.0),
+        dict(base, policy="fixed_count_depth", objective_value=1.0),
+        dict(base, policy="adaptive", objective_value=1.0),
     ]
 
     report = render_report(compared, Path("results/test"))
 
-    assert "best fixed-priority endpoint, adaptive lookahead has 1 wins" in report
-    assert "including fixed order, it has 0 wins, 1 ties" in report
+    assert "static-preference portfolio: 1 wins, 0 ties" in report
+    assert "fixed successive-sequence portfolio: 0 wins, 1 ties" in report
 
 
 def test_audit_reports_optional_backend_blocker(study):

@@ -9,21 +9,25 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import time
 from typing import Any
 
 from .adapters import FeynmanAdapter, PyZXAdapter
 from .baselines.common import CompilationConstraints
+from .circuit import Candidate
 from .inputs import acquire_manifest, load_cases, load_manifest
-from .ir import AngleBinding
-from .lowering import RotationSynthesizer
+from .ir import AngleBinding, PhaseProgram
+from .lowering import LoweredCircuit, RotationSynthesizer
 from .preprocessing import PREPROCESSING_VERSION
 from .profiles import StructuralProfile, profile
 from .reporting import render_comparison_report
+from .resources import estimate_resources
 from .search import ActionSpec, construction_seeds, default_actions, run_policy
 from .selection import FinalObjective, SelectionLimits
+from .verification import verify_lowered_circuit, verify_optimized_lowered_circuit
 
 
-RESULT_SCHEMA_VERSION = 3
+RESULT_SCHEMA_VERSION = 4
 SEMANTIC_PROFILE = "diagonal-p-v1:block-local:operator-norm"
 ERROR_METRIC = "operator_norm_telescoping"
 POLICIES = frozenset(
@@ -33,12 +37,10 @@ POLICIES = frozenset(
         "static_depth",
         "static_ancilla",
         "static_balanced",
-        "static_count_depth",
-        "static_count_ancilla",
-        "static_t_lookahead",
-        "fixed_order",
+        "fixed_count_depth",
+        "fixed_depth_count",
         "adaptive",
-        "adaptive_lookahead",
+        "frozen",
     }
 )
 
@@ -135,6 +137,7 @@ def _feynman_status(config: dict[str, Any]) -> dict[str, Any]:
             "status": "available",
             "revision": revision,
             "executable": adapter.executable,
+            "binary_sha256": hashlib.sha256(Path(adapter.executable).read_bytes()).hexdigest(),
             "actions": actions,
         }
     except Exception as exc:
@@ -308,17 +311,28 @@ def _actions(config: dict[str, Any]) -> tuple[list[ActionSpec], dict[str, Any]]:
 
 
 def _policy_budget(policy: str, policies: list[str], search: dict[str, Any]) -> int:
-    default = int(search.get("backend_call_budget", 4))
-    weighted = [
-        name
-        for name in policies
-        if name in {"static_balanced", "static_count_depth", "static_count_ancilla"}
-    ]
-    if policy not in weighted:
-        return 0 if policy == "construction_only" else default
-    position = weighted.index(policy)
-    quotient, remainder = divmod(default, len(weighted))
-    return quotient + int(position < remainder)
+    total = int(search.get("backend_call_budget", 12))
+    if policy == "construction_only":
+        return 0
+    if policy.startswith("static_"):
+        group = [name for name in policies if name.startswith("static_")]
+    elif policy.startswith("fixed_"):
+        group = [name for name in policies if name.startswith("fixed_")]
+    else:
+        return total
+    quotient, remainder = divmod(total, len(group))
+    return quotient + int(group.index(policy) < remainder)
+
+
+def _policy_seconds_budget(policy: str, policies: list[str], search: dict[str, Any]) -> float:
+    total = float(search.get("backend_seconds_budget", 60))
+    if policy.startswith("static_"):
+        count = sum(name.startswith("static_") for name in policies)
+    elif policy.startswith("fixed_"):
+        count = sum(name.startswith("fixed_") for name in policies)
+    else:
+        count = 1
+    return total / count
 
 
 def _state_summary(state) -> dict[str, Any]:
@@ -328,6 +342,8 @@ def _state_summary(state) -> dict[str, Any]:
         "objective_value": state.objective_value,
         "action": state.action,
         "source_seed": state.source_seed,
+        "parent_id": state.parent_id,
+        "depth": state.depth,
         "verification": state.verification.status,
         "optimization": state.lowered.optimization,
     }
@@ -336,6 +352,10 @@ def _state_summary(state) -> dict[str, Any]:
 def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[str, Any]]:
     root = repository_root(config)
     manifest = _manifest_for_config(config)
+    allowed_angles = {
+        case["id"]: set(case["angle_ids"])
+        for case in manifest["cases"] if "angle_ids" in case
+    }
     objective = FinalObjective.from_value(config.get("objective", "t_count"))
     limits = SelectionLimits.from_value(config.get("limits"))
     objective.validate_limits(limits)
@@ -358,16 +378,28 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
     rows: list[dict[str, Any]] = []
     for angle in _angles(config):
         for program in load_cases(manifest, angle, root):
+            if program.id in allowed_angles and angle.id not in allowed_angles[program.id]:
+                continue
             for total_error in config["total_error_budgets"]:
                 for workspace in config["workspace_budgets"]:
                     for model_profile in config["model_profiles"]:
+                        workspace = int(workspace)
+                        case_limits = SelectionLimits(
+                            t_count=limits.t_count,
+                            t_depth=limits.t_depth,
+                            ancilla=(
+                                workspace if limits.ancilla is None
+                                else min(workspace, limits.ancilla)
+                            ),
+                        )
                         constraints = CompilationConstraints(
-                            workspace_budget=int(workspace),
+                            workspace_budget=workspace,
                             model_profile=model_profile,
                             batch_policy=str(config.get("hwp_batch_policy", "balanced")),
                             objective=objective.name,
                             hwp_search_cap=int(config.get("hwp_search_cap", 8)),
                         )
+                        roots_started = time.monotonic()
                         seeds = construction_seeds(
                             program,
                             constraints,
@@ -375,6 +407,7 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
                             synthesizer,
                             objective,
                         )
+                        root_seconds = time.monotonic() - roots_started
                         for policy in policies:
                             call_budget = _policy_budget(policy, policies, search_config)
                             identity = {
@@ -383,18 +416,19 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
                                 "angle_id": angle.id,
                                 "angle_expression": angle.expression,
                                 "error_budget": float(total_error),
-                                "workspace_budget": int(workspace),
+                                "workspace_budget": workspace,
                                 "model_profile": model_profile,
                                 "policy": policy,
                                 "objective": objective.to_dict(),
-                                "limits": limits.to_dict(),
+                                "limits": case_limits.to_dict(),
                                 "backend_call_budget": call_budget,
-                                "backend_seconds_budget": float(
-                                    search_config.get("backend_seconds_budget", 30)
+                                "backend_seconds_budget": _policy_seconds_budget(
+                                    policy, policies, search_config
                                 ),
                                 "config_hash": cfg_hash,
                                 "manifest_hash": input_hash,
                                 "code_revision": revision,
+                                "backend_environment_hash": _json_hash(backend_status),
                                 "seed": int(config.get("seed", 0)),
                             }
                             row_id = _json_hash(identity)[:24]
@@ -408,12 +442,19 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
                                 seeds,
                                 actions,
                                 objective,
-                                limits,
+                                case_limits,
                                 policy=policy,
                                 max_backend_calls=call_budget,
                                 max_backend_seconds=identity["backend_seconds_budget"],
+                                max_depth=int(search_config.get("max_depth", 3)),
+                                pool_capacity=int(search_config.get("pool_capacity", 4)),
                             )
+                            result.root_seconds = root_seconds
                             selected = None if result.best is None else _state_summary(result.best)
+                            pareto_states = [
+                                value for value in result.archive
+                                if value.label in result.pareto_labels
+                            ]
                             row = {
                                 **identity,
                                 "schema_version": RESULT_SCHEMA_VERSION,
@@ -433,11 +474,17 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
                                 "evaluations": result.evaluations,
                                 "backend_calls": result.backend_calls,
                                 "backend_seconds": result.backend_seconds,
+                                "verification_seconds": result.verification_seconds,
+                                "search_seconds": result.total_seconds,
+                                "root_seconds": root_seconds,
+                                "total_seconds": root_seconds + result.total_seconds,
+                                "max_depth": int(search_config.get("max_depth", 3)),
+                                "pool_capacity": int(search_config.get("pool_capacity", 4)),
+                                "cache_hits": 0,
                                 "trace": [value.to_dict() for value in result.trace],
                                 "pareto": [
                                     _state_summary(value)
-                                    for value in result.archive
-                                    if value.label in result.pareto_labels
+                                    for value in pareto_states
                                 ],
                                 "rejection_counts": result.rejection_counts,
                                 "backend_status": backend_status,
@@ -451,9 +498,24 @@ def run_experiments(config: dict[str, Any], force: bool = False) -> list[dict[st
                                 "selected": selected,
                                 "candidate": None if result.best is None else result.best.lowered.candidate.to_dict(),
                                 "lowering": None if result.best is None else result.best.lowered.to_dict(),
+                                "verified_chain": (
+                                    [] if result.best is None else
+                                    [lowered.to_dict() for lowered in (*result.best.ancestry, result.best.lowered)]
+                                ),
                                 "verification": None if result.best is None else result.best.verification.to_dict(),
                                 "construction_seeds": [_state_summary(value) for value in seeds],
                                 "archive": [_state_summary(value) for value in result.archive],
+                                "pareto_alternatives": [
+                                    {
+                                        "summary": _state_summary(value),
+                                        "candidate": value.lowered.candidate.to_dict(),
+                                        "verified_chain": [
+                                            lowered.to_dict() for lowered in
+                                            (*value.ancestry, value.lowered)
+                                        ],
+                                    }
+                                    for value in pareto_states
+                                ],
                             }
                             artifact_path = result_root / "circuits" / f"{row_id}.json"
                             _atomic_json(artifact_path, artifact)
@@ -519,6 +581,8 @@ def verify_result_rows(results_path: str | Path, root: Path) -> dict[str, Any]:
             for name, limit in checks:
                 if limit is not None and row.get(name, math.inf) > limit:
                     failures.append(f"{row_id}: hard limit violated")
+            if row.get("peak_workspace", math.inf) > row.get("workspace_budget", -1):
+                failures.append(f"{row_id}: workspace budget violated")
             if not str(row.get("verification_status", "")).startswith("verified_lowered_"):
                 failures.append(f"{row_id}: selected circuit lacks verification")
         artifact_value = row.get("artifact_path")
@@ -539,12 +603,76 @@ def verify_result_rows(results_path: str | Path, root: Path) -> dict[str, Any]:
             failures.append(f"{row_id}: target identity mismatch")
         if artifact.get("selected") != row.get("selected"):
             failures.append(f"{row_id}: selected summary mismatch")
+        if row.get("status") == "success":
+            try:
+                program = PhaseProgram.from_dict(artifact["program"])
+                candidate = Candidate.from_dict(artifact["candidate"], program)
+                chain = [LoweredCircuit.from_dict(item, candidate) for item in artifact["verified_chain"]]
+                if not chain or chain[-1].to_dict() != artifact["lowering"]:
+                    raise ValueError("stored selected circuit differs from its verified chain")
+                if len(chain) == 1:
+                    proof = verify_lowered_circuit(chain[0], float(row["error_budget"]))
+                else:
+                    proof = verify_optimized_lowered_circuit(
+                        chain[-2], chain[-1], float(row["error_budget"]),
+                        ancestry=tuple(chain[:-2]),
+                        timeout_seconds=60,
+                    )
+                if not proof.status.startswith("verified_lowered_"):
+                    raise ValueError(f"stored chain proof failed: {proof.status}: {proof.message}")
+                measured = estimate_resources(chain[-1])
+                expected = (row["t_count"], row["t_depth"], row["peak_workspace"])
+                actual = (measured.t_count, measured.t_depth, measured.peak_workspace)
+                if actual != expected or list(actual) != artifact["selected"]["resources"]:
+                    raise ValueError("stored endpoint resources do not match emitted gates")
+                if not math.isclose(
+                    FinalObjective.from_value(row["objective"]).value(measured),
+                    row["objective_value"], rel_tol=1e-12, abs_tol=1e-12,
+                ):
+                    raise ValueError("stored endpoint objective mismatch")
+                alternatives = artifact["pareto_alternatives"]
+                if [value["summary"] for value in alternatives] != row["pareto"]:
+                    raise ValueError("stored Pareto alternatives differ from result row")
+                for alternative in alternatives:
+                    summary = alternative["summary"]
+                    other_candidate = Candidate.from_dict(alternative["candidate"], program)
+                    other_chain = [
+                        LoweredCircuit.from_dict(item, other_candidate)
+                        for item in alternative["verified_chain"]
+                    ]
+                    if not other_chain:
+                        raise ValueError("Pareto alternative lacks a proof chain")
+                    if len(other_chain) == 1:
+                        other_proof = verify_lowered_circuit(
+                            other_chain[0], float(row["error_budget"])
+                        )
+                    else:
+                        other_proof = verify_optimized_lowered_circuit(
+                            other_chain[-2], other_chain[-1], float(row["error_budget"]),
+                            ancestry=tuple(other_chain[:-2]), timeout_seconds=60,
+                        )
+                    if not other_proof.status.startswith("verified_lowered_"):
+                        raise ValueError(f"Pareto proof failed: {other_proof.status}")
+                    other_resources = estimate_resources(other_chain[-1])
+                    other_tuple = (
+                        other_resources.t_count, other_resources.t_depth,
+                        other_resources.peak_workspace,
+                    )
+                    if limits.violation(other_resources) is not None:
+                        raise ValueError("Pareto alternative violates hard limits")
+                    if list(other_tuple) != summary["resources"] or not math.isclose(
+                        FinalObjective.from_value(row["objective"]).value(other_resources),
+                        summary["objective_value"], rel_tol=1e-12, abs_tol=1e-12,
+                    ):
+                        raise ValueError("Pareto alternative resources or objective mismatch")
+            except (KeyError, TypeError, ValueError, AssertionError) as exc:
+                failures.append(f"{row_id}: chain replay failed: {exc}")
     return {
         "rows": len(rows),
         "successful_rows": sum(row.get("status") == "success" for row in rows),
         "failures": failures,
         "status": "verified" if rows and not failures else "verification_failure",
-        "scope": "schema-v3 row/artifact identity, checksums, limits, and recorded verification status",
+        "scope": "schema-v4 checksums, constraints, and replayed selected and Pareto proof chains",
     }
 
 

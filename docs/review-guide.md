@@ -29,6 +29,14 @@ optional Feynman subprocess adapter exposes only passes advertised by the
 resolved executable and requires both Feynman's verification and an independent
 PyZX equivalence reduction.
 
+The `phase_ancilla` adapter is a limited reproduction of CNOT-plus-phase
+polynomial resynthesis. It rediscovers contiguous phase regions after each
+rewrite, allocates only fresh scratch used by its parity computations, and
+checks each added wire is restored. It does not borrow idle workspace or claim
+the full Feynman T-par algorithm. See
+[`backend-applicability.md`](backend-applicability.md) for the pinned-release
+capability probe and exact diagnostic.
+
 ## 3. Checking And Counting
 
 `verify_candidate` checks the ideal construction and clean workspace.
@@ -49,9 +57,11 @@ and [`resources.py`](../src/collective_phase/resources.py).
 single-metric objectives and a weighted normalized balance with fixed positive
 reference scales. Ancilla-first selection requires explicit T-count and T-depth
 limits. [`search.py`](../src/collective_phase/search.py) shares verified seeds
-across policies, ranks actions from schedule and circuit evidence, enforces call
-and time budgets, and permits at most one construction seed followed by one
-backend action.
+across policies, ranks actions from current schedule and supported region
+evidence, and can apply up to three verified exact transformations after a seed.
+The exploration pool retains a few distinct interim outputs. A selected chain
+is reconstructed from parent IDs; attempts, including failures, are recorded
+at decision time. Both fixed orders apply their second pass to the first output.
 
 ## 5. Trace One Example
 
@@ -60,14 +70,22 @@ at angle `0.173`. The runner sends the same normalized program, total error,
 workspace budget, and gate model to all three constructors. The HWP generator
 emits batch limits 1-4 and lowers each with its actual rotation count. The
 selection code keeps nondominated `(T, T-depth, ancilla)` tuples and chooses
-under the configured T-count policy. The report row splits total T into
-arithmetic and synthesized-rotation components.
+under the configured T-count policy. After optimization it reports total T,
+because attribution to arithmetic and synthesized rotations is no longer
+reliable. The current result artifacts also contain the emitted circuits and
+proof chains for the reported Pareto alternatives.
 
-In `hwp_joint_optimization_witness`, the fixed balance objective scores the
+In the historical schema-v3 `hwp_joint_optimization_witness`, the fixed balance objective scores the
 direct seed `(200,50,0)` at `0.9125`. The HWP cap-4 seed is temporarily worse at
 `(190,73,7)`, score `0.917`, but verified PyZX extraction reaches
 `(176,114,7)`, score `0.86425`. Fixed order reaches the same endpoint, so this
 is evidence for the enabling sequence rather than adaptive-policy superiority.
+The new study records every attempt and charges matched static portfolios for
+their combined compilation cost. See `reports/iterative-ancilla.md` for the
+balanced study and `reports/ancilla-depth.md` for the exact ancilla-for-depth
+diagnostic. The count-first diagnostic holds T-count at seven on every policy;
+it tests accounting and depth tie-breaks, not a T-count improvement. Both
+diagnostics include a zero-ancilla-budget control beside the four-ancilla case.
 
 Follow the execution through `run_experiments` in
 [`experiments.py`](../src/collective_phase/experiments.py), `run_policy` in

@@ -24,12 +24,13 @@ competitive strength.
 | `macro_not_verified` | Ineligible; a formula-level or measured macro remains |
 | failure or unavailable | Ineligible |
 
-Schema-v3 runs pair each result row with a checksummed circuit artifact. During
+Schema-v4 result rows pair each result with a checksummed circuit artifact. During
 execution, construction and lowered semantics are verified and every accepted
-external result is checked against its source. Stored-result verification
-checks schema, row/artifact identity, checksum, recorded verification status,
-error and resource limits, and finite metrics; it does not claim to re-execute
-an external backend.
+external result is checked against its actual verified parent chain. Stored-result
+verification replays the saved construction-to-selected proof chain, recounts
+the selected gates and every reported Pareto circuit, and checks schema,
+checksums, error and resource limits. It does not rerun backend optimization
+or verify unreported archive items.
 
 ## Generation And Selection
 
@@ -37,9 +38,19 @@ Direct and shared-parity candidates are generated once. Ordinary HWP generates
 documented batch limits from one through the configured cap and reevaluates
 each full circuit with its actual rotation count under the same total error.
 
-The search archive retains eligible nondominated `(T, T-depth, ancilla)` points.
+The search archive retains verified feasible circuits; reporting takes the
+nondominated `(T, T-depth, ancilla)` points. Every policy begins with the same
+verified construction seeds and the same available exact actions. The search
+also retains bounded, structurally distinct, temporarily worse alternatives
+for additional transformations. Static-preference and fixed-sequence portfolios
+split a single call budget and a single search-time allowance between their
+respective policies; root preparation is charged once per portfolio.
+For each workspace-budget row, the active ancilla limit is the smaller of that
+budget and the configured hard ancilla limit; a zero-budget row cannot allocate
+scratch during search.
 Hard T-count, T-depth, and ancilla limits are applied without relaxation. If no
-candidate passes them, the result is explicitly infeasible. Supported final
+seed passes them, the result says no feasible seed found under this search
+policy; it is not a mathematical infeasibility proof. Supported final
 objectives are:
 
 | Objective | Tie-break |
@@ -57,7 +68,14 @@ optimization objective.
 
 Rows report the selected implementation, total T, scheduled T-depth, peak
 allocated workspace, objective value, synthesis error, verification scope,
-backend calls/time, rejection counts, decision trace, and Pareto endpoints.
+backend calls/time, root preparation time, rejection counts, attempt trace,
+and Pareto endpoints with replayable circuits in their checksummed artifacts.
+Verified outputs rejected by a hard limit retain their measured costs in the
+trace. Search wall time includes backend, verification, and
+controller work; backend execution is a subset and is not added again.
+PyZX optimization runs in a bounded worker, and Feynman subprocesses receive
+the remaining deadline. Failed, timed-out, and inconclusive calls consume their
+budget; a timed-out circuit cannot enter the archive.
 Scheduling uses the emitted dependency stream; stage depths are not added.
 
 The default study separates explanatory, negative-control, and public

@@ -1,0 +1,13 @@
+schema_version: 1
+selection_rule: >-
+  One predeclared exact CCZ phase-polynomial diagnostic. This is a development
+  mechanism check, not a held-out benchmark or a general workload result.
+cases:
+  - id: exact_ccz_phase_diagnostic
+    stratum: synthetic_diagnostic
+    loader: generated_masks
+    masks: [1, 2, 4, 3, 5, 6, 7]
+    coefficients: [1, 1, 1, -1, -1, -1, 1]
+    qubit_count: 3
+    seed: 0
+    complete_workload: false

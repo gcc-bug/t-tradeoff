@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import json
+import multiprocessing
 from pathlib import Path
 import shutil
 import subprocess
@@ -101,6 +102,19 @@ def _parse_dotqc(output: str, qubit_count: int) -> list[GateEvent]:
     return events
 
 
+def _optimize_worker(
+    connection, executable: str, revision: str, timeout: float,
+    lowered: LoweredCircuit, action: str,
+) -> None:
+    try:
+        adapter = FeynmanAdapter(executable, revision=revision, timeout_seconds=timeout)
+        connection.send(adapter._optimize_direct(lowered, action, timeout_seconds=timeout))
+    except BaseException as exc:
+        connection.send(AdapterResult("feynman", revision, action, "failed", 0.0, reason=str(exc)))
+    finally:
+        connection.close()
+
+
 class FeynmanAdapter:
     def __init__(
         self,
@@ -114,27 +128,70 @@ class FeynmanAdapter:
         self.revision = revision
         self.timeout_seconds = timeout_seconds
 
-    def available_actions(self) -> set[str]:
+    def available_actions(self, *, timeout_seconds: float | None = None) -> set[str]:
         completed = subprocess.run(
             [self.executable, "-h"],
             capture_output=True,
             text=True,
-            timeout=self.timeout_seconds,
+            timeout=self.timeout_seconds if timeout_seconds is None else timeout_seconds,
             check=False,
         )
         help_text = completed.stdout + completed.stderr
         return {action for action in FEYNMAN_ACTIONS if f"-{action}" in help_text}
 
-    def optimize(self, lowered: LoweredCircuit, action: str) -> AdapterResult:
+    def optimize(
+        self, lowered: LoweredCircuit, action: str, *, timeout_seconds: float | None = None
+    ) -> AdapterResult:
         if action not in FEYNMAN_ACTIONS:
             raise ValueError(f"unsupported Feynman action {action!r}")
+        if timeout_seconds is None:
+            return self._optimize_direct(lowered, action)
         started = time.perf_counter()
-        qubit_count = (
-            lowered.candidate.program.qubit_count
-            + lowered.candidate.workspace_qubits
+        if timeout_seconds <= 0:
+            return AdapterResult("feynman", self.revision, action, "timed_out", 0.0, reason="search deadline expired")
+        method = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
+        context = multiprocessing.get_context(method)
+        reader, writer = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_optimize_worker,
+            args=(writer, self.executable, self.revision, timeout_seconds, lowered, action),
         )
         try:
-            if action not in self.available_actions():
+            process.start()
+            writer.close()
+            if reader.poll(timeout_seconds):
+                try:
+                    result = reader.recv()
+                except EOFError:
+                    result = AdapterResult("feynman", self.revision, action, "failed", 0.0, reason="worker exited without a result")
+                process.join(timeout=1)
+                return result
+            return AdapterResult(
+                "feynman", self.revision, action, "timed_out",
+                time.perf_counter() - started, reason="Feynman verification exceeded remaining search time",
+            )
+        finally:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+            reader.close()
+            writer.close()
+
+    def _optimize_direct(
+        self, lowered: LoweredCircuit, action: str, *, timeout_seconds: float | None = None
+    ) -> AdapterResult:
+        started = time.perf_counter()
+        timeout = self.timeout_seconds if timeout_seconds is None else min(self.timeout_seconds, timeout_seconds)
+        qubit_count = lowered.allocated_qubits
+        if qubit_count is None:
+            qubit_count = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
+        try:
+            if timeout <= 0:
+                raise TimeoutError("search deadline expired")
+            if action not in self.available_actions(timeout_seconds=timeout):
                 raise ValueError(f"Feynman executable does not advertise -{action}")
             source = events_to_circuit(lowered.events, qubit_count)
             dotqc = _dotqc(lowered, qubit_count)
@@ -145,7 +202,7 @@ class FeynmanAdapter:
                     [self.executable, f"-{action}", "-verify", str(path)],
                     capture_output=True,
                     text=True,
-                    timeout=self.timeout_seconds,
+                    timeout=max(0.001, timeout - (time.perf_counter() - started)),
                     check=False,
                 )
             if completed.returncode != 0:

@@ -15,17 +15,18 @@ commuting-Pauli diagonalization are outside the current contract.
 
 ## Workflow
 
-The schema-v3 workflow normalizes a `PhaseProgram`, emits shared construction
-seeds, and optionally applies exact whole-circuit optimization through PyZX or
-Feynman. Every accepted circuit is checked against its source, scheduled, and
-counted as `(T, T_depth, peak allocated workspace)` before one immutable final
-objective and its hard limits choose the endpoint.
+The workflow normalizes a `PhaseProgram`, emits shared construction seeds, and
+applies exact rewrites through PyZX, optional Feynman, or a limited clean-scratch
+phase-polynomial action. Every accepted circuit is checked against its verified
+parent chain, scheduled, and counted as `(T, T_depth, allocated ancillas)`
+before one immutable final objective and hard limits choose the endpoint.
 
-The controller supports fixed priorities, a fixed pass order, state-dependent
-priorities, and bounded construction/backend lookahead. Search records every
-backend call, elapsed backend time, rejection reason, accepted decision, and
-Pareto point. `--force` rebuilds only JSON checkpoints below the configured
-`results/` subdirectory so stale result schemas cannot contaminate a run.
+The bounded controller supports adaptive or frozen priorities, fixed static
+preferences, and two successive fixed pass orders, all using the same seeds
+and action library. Its attempt trace records intermediate resource changes,
+including rejected rewrites. `--force` rebuilds only JSON checkpoints below
+the configured `results/` subdirectory. Each reported Pareto alternative has
+an emitted circuit and replayable proof chain in the policy's circuit artifact.
 
 The default comparison contains `independent`, `shared_parity`, and
 `hwp_adder_unitary`. The HWP construction emits the staged adder/compressor
@@ -73,19 +74,26 @@ data, not held-out evidence. The configuration declares a generic angle,
 `1e-4` total error, eight workspace qubits, a T-count objective, and explicit
 hard limits.
 
-The adaptive development comparison is separate:
+The new iterative comparison is separate from the historical one-shot report:
 
 ```bash
 python -m collective_phase audit --config configs/adaptive-comparison.yaml
-python -m collective_phase run --config configs/adaptive-comparison.yaml --force
-python -m collective_phase verify --results results/raw/adaptive-comparison
-python -m collective_phase report --results results/raw/adaptive-comparison \
-  --output reports/adaptive-comparison.md
+python -m collective_phase run --config configs/adaptive-comparison.yaml
+python -m collective_phase verify --results results/raw/iterative-ancilla
+python -m collective_phase report --results results/raw/iterative-ancilla \
+  --output reports/iterative-ancilla.md
 ```
 
 Its fixed weighted objective uses positive configured reference scales and the
-same hard limits for every policy. The two synthetic inputs are explanatory
-development diagnostics, not held-out evidence.
+same hard limits for every policy. Synthetic inputs are explanatory development
+diagnostics, not held-out evidence. Exact phase-block scratch resynthesis is
+documented in [docs/backend-applicability.md](docs/backend-applicability.md).
+The measured run uses the pinned optional Feynman release available on `PATH`;
+the release archive digest and the unsupported-backend behavior are documented
+there. Smaller count-first and depth-first diagnostics use
+`configs/ancilla-count.yaml` and `configs/ancilla-depth.yaml`; each can be run,
+verified, and reported with the same CLI commands and its configured results
+directory.
 
 Start review with [docs/review-guide.md](docs/review-guide.md). The precise
 semantic and accounting contracts are in [docs/semantics.md](docs/semantics.md)
@@ -96,8 +104,11 @@ and [docs/prior-work-matrix.md](docs/prior-work-matrix.md).
 ## Interpretation Limits
 
 The current evidence shows an enabling construction/backend sequence, but a
-fixed pass order reaches the same development endpoint. It therefore does not
-establish that adaptive priority is superior. The study is unitary-only;
+fixed pass order reaches the same development endpoint. The balanced study
+ties frozen priorities on all five cases, so it does not establish that
+recomputation improves search. The exact depth diagnostic uses extra clean
+ancillas to reduce T-depth, but the count diagnostic finds no T-count decrease.
+The study is unitary-only;
 measurement-assisted and catalytic performance comparisons remain unsupported.
 
 Historical reports are indexed in [reports/README.md](reports/README.md); their

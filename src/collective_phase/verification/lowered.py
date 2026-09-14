@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 import cmath
 from functools import lru_cache
 import math
+import multiprocessing
 
 import numpy as np
 
@@ -159,9 +160,11 @@ def _validate_events(lowered: LoweredCircuit) -> str | None:
     declared_qubits = (
         lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
     )
-    total_qubits = lowered.allocated_qubits or declared_qubits
-    if not lowered.candidate.program.qubit_count <= total_qubits <= declared_qubits:
-        return "allocated qubits must include data and fit the declared circuit"
+    total_qubits = lowered.allocated_qubits if lowered.allocated_qubits is not None else declared_qubits
+    if total_qubits < lowered.candidate.program.qubit_count:
+        return "allocated qubits must include data"
+    if lowered.optimization is None and total_qubits > declared_qubits:
+        return "construction exceeds its declared workspace"
     for event in lowered.events:
         if isinstance(event, MacroEvent):
             if any(
@@ -314,7 +317,7 @@ def _expected_emitted_stream(
 
 def _dense_isometry_error(lowered: LoweredCircuit) -> float:
     data_qubits = lowered.candidate.program.qubit_count
-    total_qubits = lowered.allocated_qubits or (
+    total_qubits = lowered.allocated_qubits if lowered.allocated_qubits is not None else (
         data_qubits + lowered.candidate.workspace_qubits
     )
     data_size = 1 << data_qubits
@@ -446,9 +449,8 @@ def verify_lowered_circuit(
         )
     data_size = 1 << lowered.candidate.program.qubit_count
     full_size = 1 << (
-        lowered.allocated_qubits
-        or lowered.candidate.program.qubit_count
-        + lowered.candidate.workspace_qubits
+        lowered.allocated_qubits if lowered.allocated_qubits is not None
+        else lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
     )
     matrix_bytes = full_size * data_size * np.dtype(np.complex128).itemsize
     allocation_estimate = 3 * matrix_bytes
@@ -488,11 +490,84 @@ def verify_optimized_lowered_circuit(
     total_error: float,
     *,
     memory_cap_bytes: int = 32 * 1024 * 1024,
+    ancestry: tuple[LoweredCircuit, ...] = (),
+    timeout_seconds: float | None = None,
 ) -> LoweredVerificationResult:
-    """Verify an exact external rewrite against its already-bound source stream."""
-    source_verification = verify_lowered_circuit(
-        source, total_error, memory_cap_bytes=memory_cap_bytes
-    )
+    """Verify every edge from a construction root through the actual parent."""
+    if timeout_seconds is not None:
+        if timeout_seconds <= 0:
+            return LoweredVerificationResult(
+                "lowered_evidence_unsupported", "verification_timeout", None,
+                source.error_bound, True, 0, memory_cap_bytes, "verification deadline expired",
+            )
+        method = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
+        context = multiprocessing.get_context(method)
+        reader, writer = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_verification_worker,
+            args=(writer, source, result, total_error, memory_cap_bytes, ancestry),
+        )
+        try:
+            process.start()
+            writer.close()
+            if reader.poll(timeout_seconds):
+                try:
+                    proof = reader.recv()
+                except EOFError:
+                    proof = LoweredVerificationResult(
+                        "lowered_evidence_unsupported", "verification_worker", None,
+                        source.error_bound, True, 0, memory_cap_bytes,
+                        "verification worker exited without a result",
+                    )
+                process.join(timeout=1)
+                return proof
+            return LoweredVerificationResult(
+                "lowered_evidence_unsupported", "verification_timeout", None,
+                source.error_bound, True, 0, memory_cap_bytes,
+                "verification exceeded the remaining search time",
+            )
+        finally:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+            reader.close()
+            writer.close()
+    return _verify_optimized_unbounded(source, result, total_error, memory_cap_bytes, ancestry)
+
+
+def _verification_worker(
+    connection, source: LoweredCircuit, result: LoweredCircuit,
+    total_error: float, memory_cap_bytes: int, ancestry: tuple[LoweredCircuit, ...],
+) -> None:
+    try:
+        connection.send(_verify_optimized_unbounded(source, result, total_error, memory_cap_bytes, ancestry))
+    except BaseException as exc:
+        connection.send(LoweredVerificationResult(
+            "lowered_evidence_unsupported", "verification_worker", None,
+            source.error_bound, True, 0, memory_cap_bytes, str(exc),
+        ))
+    finally:
+        connection.close()
+
+
+def _verify_optimized_unbounded(
+    source: LoweredCircuit, result: LoweredCircuit, total_error: float,
+    memory_cap_bytes: int, ancestry: tuple[LoweredCircuit, ...],
+) -> LoweredVerificationResult:
+    if source.optimization is None:
+        root, previous = source, ()
+    elif ancestry and ancestry[0].optimization is None:
+        root, previous = ancestry[0], (*ancestry[1:], source)
+    else:
+        return LoweredVerificationResult(
+            "lowered_evidence_unsupported", "missing_verified_ancestry", None,
+            source.error_bound, True, 0, memory_cap_bytes,
+            "optimized parents require their construction-to-parent chain",
+        )
+    source_verification = verify_lowered_circuit(root, total_error, memory_cap_bytes=memory_cap_bytes)
     if not source_verification.status.startswith("verified_lowered_"):
         return LoweredVerificationResult(
             "lowered_evidence_unsupported",
@@ -502,8 +577,25 @@ def verify_optimized_lowered_circuit(
             True,
             0,
             memory_cap_bytes,
-            f"external rewrite source is not verified: {source_verification.status}",
+            f"external rewrite root is not verified: {source_verification.status}",
         )
+    current = root
+    for child in previous:
+        source_verification = _verify_external_edge(
+            current, child, total_error, memory_cap_bytes
+        )
+        if not source_verification.status.startswith("verified_lowered_"):
+            return source_verification
+        current = child
+    return _verify_external_edge(source, result, total_error, memory_cap_bytes)
+
+
+def _verify_external_edge(
+    source: LoweredCircuit,
+    result: LoweredCircuit,
+    total_error: float,
+    memory_cap_bytes: int,
+) -> LoweredVerificationResult:
     event_error = _validate_events(result)
     if event_error:
         return LoweredVerificationResult(
@@ -515,7 +607,12 @@ def verify_optimized_lowered_circuit(
             "verification_failure", "external_boundary", None, result.error_bound,
             True, 0, memory_cap_bytes, "external rewrite changed the symbolic target"
         )
-    if result.error_bound != source.error_bound or result.error_metric != source.error_metric:
+    if (
+        result.error_bound != source.error_bound
+        or result.error_metric != source.error_metric
+        or result.preparation_rotations != source.preparation_rotations
+        or result.application_rotations != source.application_rotations
+    ):
         return LoweredVerificationResult(
             "verification_failure", "external_error_contract", None, result.error_bound,
             True, 0, memory_cap_bytes, "exact rewrite changed the synthesis-error contract"
@@ -525,28 +622,66 @@ def verify_optimized_lowered_circuit(
             "verification_failure", "external_provenance", None, result.error_bound,
             True, 0, memory_cap_bytes, "external rewrite lacks backend provenance"
         )
-    try:
-        from ..adapters._pyzx_circuit import equivalence_phase, events_to_circuit
+    if result.optimization.get("backend") == "phase_ancilla":
+        try:
+            from ..adapters.phase_ancilla import phase_signature
 
-        qubits = source.candidate.program.qubit_count + source.candidate.workspace_qubits
-        source_circuit = events_to_circuit(source.events, qubits)
-        result_circuit = events_to_circuit(result.events, qubits)
-        phase = equivalence_phase(source_circuit, result_circuit)
-    except Exception as exc:
-        return LoweredVerificationResult(
-            "verification_failure", "external_equivalence", None, result.error_bound,
-            True, 0, memory_cap_bytes, str(exc)
-        )
-    correction = result.lowering_global_phase - source.lowering_global_phase
-    if abs(cmath.exp(1j * correction) - cmath.exp(-1j * phase)) > 1e-9:
-        return LoweredVerificationResult(
-            "verification_failure", "external_global_phase", None, result.error_bound,
-            True, 0, memory_cap_bytes, "external global-phase correction is inconsistent"
-        )
+            start, stop = result.optimization["region"]
+            scratch = result.optimization["scratch"]
+            live = source.allocated_qubits
+            if live is None:
+                live = source.candidate.program.qubit_count + source.candidate.workspace_qubits
+            if (
+                not isinstance(start, int) or not isinstance(stop, int)
+                or not 0 <= start < stop <= len(source.events)
+                or not isinstance(scratch, int) or scratch <= 0
+                or result.allocated_qubits != live + scratch
+                or result.events[:start] != source.events[:start]
+            ):
+                raise ValueError("invalid phase-region boundary or allocation")
+            suffix = source.events[stop:]
+            if suffix and result.events[-len(suffix):] != suffix:
+                raise ValueError("phase replacement changed gates outside its region")
+            replacement = result.events[start:len(result.events) - len(suffix)] if suffix else result.events[start:]
+            expected_map, expected_phase = phase_signature(source.events[start:stop], live, live)
+            actual_map, actual_phase = phase_signature(replacement, live, live + scratch)
+            if actual_map != expected_map + (0,) * scratch or actual_phase != expected_phase:
+                raise ValueError("phase replacement changes live action or leaves scratch dirty")
+            if abs(cmath.exp(1j * (result.lowering_global_phase - source.lowering_global_phase)) - 1) > 1e-9:
+                raise ValueError("phase replacement changes the global phase")
+        except (ValueError, TypeError, KeyError, IndexError) as exc:
+            return LoweredVerificationResult(
+                "verification_failure", "clean_phase_polynomial", None,
+                result.error_bound, True, 0, memory_cap_bytes, str(exc),
+            )
+    else:
+        try:
+            from ..adapters._pyzx_circuit import equivalence_phase, events_to_circuit
+
+            source_width = source.allocated_qubits
+            if source_width is None:
+                source_width = source.candidate.program.qubit_count + source.candidate.workspace_qubits
+            result_width = result.allocated_qubits if result.allocated_qubits is not None else source_width
+            if result_width > source_width:
+                raise ValueError("whole-unitary rewrite cannot add clean scratch")
+            source_circuit = events_to_circuit(source.events, source_width)
+            result_circuit = events_to_circuit(result.events, source_width)
+            phase = equivalence_phase(source_circuit, result_circuit)
+        except Exception as exc:
+            return LoweredVerificationResult(
+                "verification_failure", "external_equivalence", None, result.error_bound,
+                True, 0, memory_cap_bytes, str(exc)
+            )
+        correction = result.lowering_global_phase - source.lowering_global_phase
+        if abs(cmath.exp(1j * correction) - cmath.exp(-1j * phase)) > 1e-9:
+            return LoweredVerificationResult(
+                "verification_failure", "external_global_phase", None, result.error_bound,
+                True, 0, memory_cap_bytes, "external global-phase correction is inconsistent"
+            )
     data_size = 1 << result.candidate.program.qubit_count
     full_size = 1 << (
-        result.allocated_qubits
-        or result.candidate.program.qubit_count + result.candidate.workspace_qubits
+        result.allocated_qubits if result.allocated_qubits is not None
+        else result.candidate.program.qubit_count + result.candidate.workspace_qubits
     )
     matrix_bytes = full_size * data_size * np.dtype(np.complex128).itemsize
     if 3 * matrix_bytes <= memory_cap_bytes:

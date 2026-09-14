@@ -1,0 +1,32 @@
+schema_version: 3
+run_id: ancilla-depth-diagnostic
+manifest: data/manifests/ancilla-diagnostic.yaml
+analysis_focus: depth_under_count_cap
+angles:
+  - id: theta_exact
+    value: "pi/4"
+total_error_budgets: [1.0e-4]
+workspace_budgets: [0, 4]
+model_profiles: [unitary_clifford_t]
+policies: [static_t, static_depth, static_ancilla, static_balanced, fixed_count_depth, fixed_depth_count, adaptive, frozen]
+required_policies: [static_t, static_depth, static_ancilla, static_balanced, fixed_count_depth, fixed_depth_count, adaptive, frozen]
+objective: t_depth
+limits:
+  ancilla: 4
+  t_depth: 5
+  t_count: 7
+hwp_search_cap: 4
+seed: 0
+backends:
+  feynman:
+    executable: feynopt
+    revision: v0.1.0@2b52a0a78c10999cfc4c1d9c76c994c471cf2350
+    timeout_seconds: 20
+search:
+  backend_call_budget: 12
+  backend_seconds_budget: 60
+  max_depth: 3
+  pool_capacity: 4
+  actions: [pyzx:zx_extract, pyzx:todd, feynman:tpar, feynman:phasefold, phase_ancilla:parallel_phase]
+results_dir: results/raw/ancilla-depth-diagnostic
+diagnosis_path: reports/ancilla-depth-diagnosis.md

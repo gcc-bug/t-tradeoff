@@ -1,12 +1,14 @@
-from collective_phase.adapters import PyZXAdapter
+from dataclasses import replace
+
+from collective_phase.adapters import AdapterResult, PyZXAdapter
 from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
-from collective_phase.lowering import RotationSynthesizer
-from collective_phase.search import construction_seeds, default_actions, run_policy
+from collective_phase.lowering import GateEvent, RotationSynthesizer
+from collective_phase.search import ActionSpec, construction_seeds, default_actions, run_policy
 from collective_phase.selection import FinalObjective, SelectionLimits
 
 
-def test_real_circuit_lookahead_exposes_joint_optimization(tmp_path):
+def test_matched_policies_can_optimize_hwp_and_fixed_order_is_successive(tmp_path):
     program = make_program(
         "four", 4, [1, 2, 4, 8], AngleBinding("theta", "0.173")
     )
@@ -26,31 +28,62 @@ def test_real_circuit_lookahead_exposes_joint_optimization(tmp_path):
         objective,
     )
     actions = default_actions(PyZXAdapter(seed=0))
-    without = run_policy(
+    common = [state for state in seeds if state.lowered.candidate.method in {"independent", "hwp_adder_unitary"}]
+    common = [state for state in common if state.lowered.candidate.method == "independent" or state.label.endswith("cap_4")]
+    assert len(common) == 2
+    for policy in ("adaptive", "static_t", "frozen"):
+        outcome = run_policy(
+            common, actions[:1], objective, limits,
+            policy=policy, max_backend_calls=2, max_depth=1,
+        )
+        assert {step.parent_id for step in outcome.trace} == {state.label for state in common}
+
+    exact = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7],
+        AngleBinding("theta", "pi/4"), coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    exact_seeds = construction_seeds(
+        exact, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "exact-rotations.json"),
+        FinalObjective(metric="t_depth"),
+    )
+    exact_seeds = [state for state in exact_seeds if state.lowered.candidate.method == "independent"]
+    fixed = run_policy(
+        exact_seeds, actions, FinalObjective(metric="t_depth"), SelectionLimits(ancilla=4),
+        policy="fixed_count_depth", max_backend_calls=8,
+    )
+    assert any(step.parent_id != exact_seeds[0].label and step.status == "accepted" for step in fixed.trace)
+    assert any(step.action_backend == "phase_ancilla:parallel_phase" and step.a_after > step.a_before for step in fixed.trace)
+    assert fixed.best is not None
+    assert fixed.best.depth >= 1
+
+
+def test_search_can_retain_a_worse_feasible_parent_and_respects_budget(tmp_path):
+    program = make_program(
+        "four", 4, [1, 2, 4, 8], AngleBinding("theta", "0.173")
+    )
+    objective = FinalObjective.from_value(
+        {"mode": "balance", "weights": {"t_count": 0.9, "t_depth": 0.05, "ancilla": 0.05},
+         "references": {"t_count": 200, "t_depth": 200, "ancilla": 8}}
+    )
+    limits = SelectionLimits(ancilla=8)
+    seeds = construction_seeds(
+        program, CompilationConstraints(8, "unitary_clifford_t", hwp_search_cap=4),
+        1e-4, RotationSynthesizer(tmp_path / "rotations2.json"), objective,
+    )
+    result = run_policy(
         seeds,
-        actions,
+        default_actions(PyZXAdapter(seed=0)),
         objective,
         limits,
-        policy="adaptive",
-        max_backend_calls=2,
+        policy="fixed_count_depth",
+        max_backend_calls=12,
     )
-    with_lookahead = run_policy(
-        seeds,
-        actions,
-        objective,
-        limits,
-        policy="adaptive_lookahead",
-        max_backend_calls=4,
-    )
-    assert without.best is not None
-    assert with_lookahead.best is not None
-    assert with_lookahead.best.resources.t_count < without.best.resources.t_count
-    assert with_lookahead.best.lowered.optimization["backend"] == "pyzx"
-    assert len(with_lookahead.trace) == 2
-    assert with_lookahead.trace[0].provisional is True
-    assert with_lookahead.trace[0].j_after > with_lookahead.trace[0].j_before
-    assert with_lookahead.trace[1].j_after < with_lookahead.trace[1].j_before
-    assert with_lookahead.best.objective_value < without.best.objective_value
+    assert result.backend_calls <= 12
+    assert all(limits.violation(state.resources) is None for state in result.archive)
+    assert result.best is not None
+    assert result.trace
+    assert all(step.parent_id for step in result.trace)
 
 
 def test_search_preserves_hard_limits_and_fixed_objective(tmp_path):
@@ -83,3 +116,109 @@ def test_search_preserves_hard_limits_and_fixed_objective(tmp_path):
     assert result.limits == limits
     assert result.best is not None
     assert limits.violation(result.best.resources) is None
+
+
+def test_scratch_budget_blocks_and_admits_exact_boundary(tmp_path):
+    program = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7], AngleBinding("theta", "pi/4"),
+        coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    objective = FinalObjective(metric="t_depth")
+    seeds = construction_seeds(
+        program, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "boundary.json"), objective,
+    )
+    seed = next(state for state in seeds if state.lowered.candidate.method == "independent")
+    scratch_four = [action for action in default_actions(PyZXAdapter(seed=0)) if action.backend == "phase_ancilla"]
+    scratch_four[0] = replace(scratch_four[0], scratch_allowances=(4,))
+    rejected = run_policy([seed], scratch_four, objective, SelectionLimits(ancilla=3), policy="adaptive", max_backend_calls=1)
+    accepted = run_policy([seed], scratch_four, objective, SelectionLimits(ancilla=4), policy="adaptive", max_backend_calls=1)
+    assert rejected.backend_calls == 0
+    assert accepted.backend_calls == 1
+    assert accepted.best is not None
+    assert accepted.best.resource_tuple == (7, 1, 4)
+
+
+def test_fixed_sequence_continues_after_verified_noop(tmp_path):
+    class NoOp:
+        def optimize(self, lowered, action):
+            return AdapterResult(
+                "pyzx", "noop-fixture", action, "verified", 0.0,
+                replace(lowered, optimization={"backend": "pyzx", "action": action}),
+            )
+
+    program = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7], AngleBinding("theta", "pi/4"),
+        coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    objective = FinalObjective(metric="t_depth")
+    seeds = construction_seeds(
+        program, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "noop.json"), objective,
+    )
+    seed = next(state for state in seeds if state.lowered.candidate.method == "independent")
+    scratch = next(action for action in default_actions(PyZXAdapter(seed=0)) if action.backend == "phase_ancilla")
+    actions = [ActionSpec("pyzx:zx_extract", "pyzx", "zx_extract", (1, 0, 0), NoOp()), scratch]
+    result = run_policy(
+        [seed], actions, objective, SelectionLimits(ancilla=4),
+        policy="fixed_count_depth", max_backend_calls=3,
+    )
+    assert result.trace[0].status == "unchanged"
+    assert result.trace[1].parent_id == result.trace[0].output_id
+    assert result.trace[1].status == "accepted"
+    assert result.best is not None and result.best.depth == 2
+
+
+def test_rejected_verified_output_keeps_measured_resources_in_trace(tmp_path):
+    class OverBudget:
+        def optimize(self, lowered, action):
+            return AdapterResult(
+                "pyzx", "over-budget-fixture", action, "verified", 0.0,
+                replace(
+                    lowered,
+                    events=[*lowered.events, GateEvent("t", (0,)), GateEvent("tdg", (0,))],
+                    optimization={"backend": "pyzx", "action": action},
+                ),
+            )
+
+    program = make_program("one", 1, [1], AngleBinding("theta", "pi/4"))
+    objective = FinalObjective(metric="t_count")
+    seeds = construction_seeds(
+        program, CompilationConstraints(0, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "rejected.json"), objective,
+    )
+    result = run_policy(
+        seeds[:1], [ActionSpec("pyzx:basic", "pyzx", "basic", (1, 0, 0), OverBudget())],
+        objective, SelectionLimits(t_count=1, t_depth=1, ancilla=0),
+        policy="adaptive", max_backend_calls=1,
+    )
+    assert result.best is not None and result.best.resource_tuple == (1, 1, 0)
+    assert result.trace[0].status == "hard_limit"
+    assert (result.trace[0].t_after, result.trace[0].d_after, result.trace[0].a_after) == (3, 3, 0)
+    assert result.trace[0].j_after == 3
+
+
+def test_adaptive_priority_recounts_a_real_transformed_parent(tmp_path):
+    program = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7], AngleBinding("theta", "pi/4"),
+        coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    objective = FinalObjective(metric="t_depth")
+    seeds = construction_seeds(
+        program, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "priority.json"), objective,
+    )
+    seed = next(value for value in seeds if value.lowered.candidate.method == "independent")
+    actions = default_actions(PyZXAdapter(seed=0))
+    actions = [value for value in actions if value.name in {"phase_ancilla:parallel_phase", "pyzx:zx_extract"}]
+    result = run_policy(
+        [seed], actions, objective, SelectionLimits(t_depth=5, ancilla=4),
+        policy="adaptive", max_backend_calls=3,
+    )
+
+    first = result.trace[0]
+    continuation = result.trace[2]
+    assert first.status == "accepted" and first.a_after > first.a_before
+    assert continuation.parent_id == first.output_id
+    assert continuation.priority_vector[1] < first.priority_vector[1]
+    assert continuation.d_before == first.d_after

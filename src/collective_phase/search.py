@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict, dataclass, field
+import hashlib
+import json
+import time
 from typing import Protocol
 
-from .adapters import AdapterResult
+from .adapters import AdapterResult, PyZXAdapter
+from .adapters.phase_ancilla import PhaseAncillaAdapter, phase_regions
 from .baselines import (
     compile_hwp_adder_unitary_alternatives,
     compile_independent,
@@ -37,6 +41,7 @@ class ActionSpec:
     action: str
     orientation: tuple[float, float, float]
     optimizer: Optimizer = field(compare=False, repr=False)
+    scratch_allowances: tuple[int, ...] = (0,)
 
 
 @dataclass
@@ -49,6 +54,9 @@ class SearchState:
     source_seed: str
     total_error: float
     action: str = "construction_seed"
+    parent_id: str | None = None
+    depth: int = 0
+    ancestry: tuple[LoweredCircuit, ...] = field(default=(), repr=False)
 
     @property
     def resource_tuple(self) -> tuple[int, int, int]:
@@ -77,6 +85,12 @@ class DecisionTraceRow:
     evaluations: int
     backend_seconds: float
     provisional: bool = False
+    parent_id: str = ""
+    output_id: str | None = None
+    allowance: int = 0
+    priority_vector: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    status: str = "accepted"
+    verification_status: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -97,6 +111,9 @@ class SearchResult:
     backend_calls: int
     backend_seconds: float
     rejection_counts: dict[str, int]
+    total_seconds: float = 0.0
+    verification_seconds: float = 0.0
+    root_seconds: float = 0.0
 
     def summary(self) -> dict:
         return {
@@ -116,6 +133,9 @@ class SearchResult:
             "backend_calls": self.backend_calls,
             "backend_seconds": self.backend_seconds,
             "rejection_counts": self.rejection_counts,
+            "total_seconds": self.total_seconds,
+            "verification_seconds": self.verification_seconds,
+            "root_seconds": self.root_seconds,
         }
 
 
@@ -126,6 +146,9 @@ class _Proposal:
     priority: float
     reason: str
     provisional: bool
+    region: tuple[int, int] | None = None
+    allowance: int = 0
+    priority_vector: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 def construction_seeds(
@@ -198,7 +221,7 @@ def _constraint_pressure(
     values = (resources.t_count, resources.t_depth, resources.peak_workspace)
     bounds = (limits.t_count, limits.t_depth, limits.ancilla)
     return tuple(
-        0.0 if bound is None or bound == 0 else min(value / bound, 2.0)
+        0.0 if bound is None or bound == 0 else max(0.0, value / bound - 0.8)
         for value, bound in zip(values, bounds, strict=True)
     )
 
@@ -208,62 +231,62 @@ def _adaptive_priority(
     action: ActionSpec,
     objective: FinalObjective,
     limits: SelectionLimits,
-    incumbent: SearchState,
-) -> tuple[float, str]:
+    allowance: int,
+) -> tuple[float, str, tuple[float, float, float]]:
     schedule = schedule_events(state.lowered.events)
     critical_fraction = (
         len(schedule.critical_t_events) / schedule.t_count if schedule.t_count else 0.0
     )
-    toffoli_count = sum(
-        operation.kind == "toffoli"
-        for operation in state.lowered.candidate.operations
-    )
-    algebraic_opportunity = toffoli_count / (toffoli_count + 4)
     weights = _objective_weights(objective)
-    pressure = _constraint_pressure(incumbent.resources, limits)
+    pressure = _constraint_pressure(state.resources, limits)
     demand = tuple(
         weight + constraint
         for weight, constraint in zip(weights, pressure, strict=True)
     )
     evidence = (
-        action.orientation[0] * (1.0 + algebraic_opportunity),
+        action.orientation[0],
         action.orientation[1] * (0.5 + critical_fraction),
-        action.orientation[2],
+        action.orientation[2] - allowance / objective.ancilla_reference,
     )
     priority = sum(
         need * support for need, support in zip(demand, evidence, strict=True)
     )
-    if action.orientation[1] >= action.orientation[0]:
+    if allowance:
+        reason = (
+            f"{len(schedule.critical_t_events)}/{schedule.t_count} T gates on "
+            f"critical paths; {allowance} clean scratch wires requested "
+            "for a supported CNOT/phase region; depth gain is unproven"
+        )
+    elif action.orientation[1] >= action.orientation[0]:
         reason = (
             f"{len(schedule.critical_t_events)}/{schedule.t_count} T gates are "
             "on a critical dependency path; prioritize depth resynthesis"
         )
     else:
-        slack_events = sum(value > 0 for value in schedule.event_slack)
         reason = (
-            f"count has weight/pressure {demand[0]:.3f} and "
-            f"{slack_events} scheduled events have T-slack; {toffoli_count} logical "
-            "Toffolis expose a joint exact-simplification opportunity"
+            f"count priority {demand[0]:.3f}; "
+            f"{sum(value > 0 for value in schedule.event_slack)} current events have T-slack"
         )
-    return priority, reason
+    return priority, reason, demand
 
 
-def _static_priority(policy: str, action: ActionSpec) -> tuple[float, str]:
+def _static_priority(policy: str, action: ActionSpec, allowance: int) -> tuple[float, str, tuple[float, float, float]]:
     weights = {
         "static_t": (1.0, 0.0, 0.0),
         "static_depth": (0.0, 1.0, 0.0),
         "static_ancilla": (0.0, 0.0, 1.0),
-        "static_t_lookahead": (1.0, 0.0, 0.0),
         "static_balanced": (1 / 3, 1 / 3, 1 / 3),
-        "static_count_depth": (0.5, 0.5, 0.0),
-        "static_count_ancilla": (0.5, 0.0, 0.5),
     }.get(policy, (1.0, 0.0, 0.0))
     return (
         sum(
             weight * support
-            for weight, support in zip(weights, action.orientation, strict=True)
+            for weight, support in zip(
+                weights, (action.orientation[0], action.orientation[1],
+                          action.orientation[2] - allowance), strict=True
+            )
         ),
         f"fixed {policy.removeprefix('static_')} action priority",
+        weights,
     )
 
 
@@ -273,41 +296,50 @@ def _proposal_order(
     actions: list[ActionSpec],
     objective: FinalObjective,
     limits: SelectionLimits,
-    initial: SearchState,
-    incumbent: SearchState,
-    lookahead: bool,
+    attempted: set[tuple[str, str, tuple[int, int] | None, int]],
+    roots: dict[str, SearchState],
+    max_depth: int,
 ) -> list[_Proposal]:
     proposals: list[_Proposal] = []
     for source in sources:
-        if source is not initial and not lookahead:
-            continue
-        if limits.violation(source.resources) is not None:
+        if source.depth >= max_depth or limits.violation(source.resources) is not None:
             continue
         for action in actions:
-            if policy.startswith("adaptive"):
-                priority, reason = _adaptive_priority(
-                    source, action, objective, limits, incumbent
+            if action.backend == "phase_ancilla" and source.action == action.name:
+                continue
+            if policy.startswith("fixed_"):
+                names = (
+                    ("pyzx:zx_extract", "phase_ancilla:parallel_phase")
+                    if policy == "fixed_count_depth"
+                    else ("phase_ancilla:parallel_phase", "pyzx:zx_extract")
                 )
-            elif policy == "fixed_order":
-                priority = float(len(actions) - actions.index(action))
-                reason = "predeclared construction/action order"
-            else:
-                priority, reason = _static_priority(policy, action)
-            proposals.append(
-                _Proposal(
-                    source,
-                    action,
-                    priority,
-                    reason,
-                    source is not initial,
-                )
-            )
+                if action.name != names[source.depth % len(names)]:
+                    continue
+            regions = phase_regions(source.lowered.events) if action.backend == "phase_ancilla" else [None]
+            for region in regions:
+                for allowance in action.scratch_allowances:
+                    if (source.label, action.name, region, allowance) in attempted:
+                        continue
+                    if limits.ancilla is not None and source.resources.peak_workspace + allowance > limits.ancilla:
+                        continue
+                    if policy == "adaptive":
+                        priority, reason, vector = _adaptive_priority(source, action, objective, limits, allowance)
+                    elif policy == "frozen":
+                        priority, reason, vector = _adaptive_priority(roots[source.source_seed], action, objective, limits, allowance)
+                        reason = "frozen seed priority; " + reason
+                    elif policy.startswith("fixed_"):
+                        priority, reason, vector = float(max_depth - source.depth), "predeclared successive pass sequence", (0.0, 0.0, 0.0)
+                    else:
+                        priority, reason, vector = _static_priority(policy, action, allowance)
+                    proposals.append(_Proposal(source, action, priority, reason, source.depth > 0, region, allowance, vector))
     return sorted(
         proposals,
         key=lambda item: (
             -item.priority,
+            item.source.depth,
             item.source.label,
             item.action.name,
+            item.allowance,
         ),
     )
 
@@ -320,7 +352,7 @@ def _better(first: SearchState, second: SearchState, objective: FinalObjective) 
 
 def default_actions(pyzx: Optimizer, feynman: Optimizer | None = None) -> list[ActionSpec]:
     actions = [
-        ActionSpec("pyzx:zx_extract", "pyzx", "zx_extract", (1.0, 0.7, 0.1), pyzx),
+        ActionSpec("pyzx:zx_extract", "pyzx", "zx_extract", (1.0, 0.7, 0.0), pyzx),
         ActionSpec("pyzx:todd", "pyzx", "todd", (1.0, 0.4, 0.0), pyzx),
     ]
     if feynman is not None:
@@ -336,7 +368,24 @@ def default_actions(pyzx: Optimizer, feynman: Optimizer | None = None) -> list[A
                 ),
             ]
         )
+    actions.append(
+        ActionSpec(
+            "phase_ancilla:parallel_phase", "phase_ancilla", "parallel_phase",
+            (0.0, 1.0, 0.0), PhaseAncillaAdapter(), (1, 2, 4),
+        )
+    )
     return actions
+
+
+def _state_key(state: SearchState) -> str:
+    lowered = state.lowered
+    encoded = json.dumps(
+        (lowered.candidate.program.id, lowered.candidate.global_phase,
+         lowered.lowering_global_phase, lowered.error_bound,
+         lowered.allocated_qubits, [event.to_dict() for event in lowered.events]),
+        sort_keys=True, separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def run_policy(
@@ -346,130 +395,157 @@ def run_policy(
     limits: SelectionLimits,
     *,
     policy: str,
-    max_backend_calls: int = 4,
-    max_backend_seconds: float = 30.0,
+    max_backend_calls: int = 12,
+    max_backend_seconds: float = 60.0,
+    max_depth: int = 3,
+    pool_capacity: int = 4,
 ) -> SearchResult:
-    if max_backend_calls < 0 or max_backend_seconds <= 0:
-        raise ValueError("search budgets must be non-negative calls and positive time")
+    if max_backend_calls < 0 or max_backend_seconds <= 0 or max_depth < 1 or pool_capacity < 1:
+        raise ValueError("invalid search call, time, depth, or pool budget")
+    started = time.monotonic()
+    deadline = started + max_backend_seconds
     objective.validate_limits(limits)
     initial = next(
         (state for state in seeds if state.lowered.candidate.method == "independent"),
         None,
     )
-    feasible_seeds = [
-        state for state in seeds if limits.violation(state.resources) is None
-    ]
-    if initial is None or not feasible_seeds:
+    unique: dict[str, SearchState] = {}
+    for seed in seeds:
+        unique.setdefault(_state_key(seed), seed)
+    roots = list(unique.values())
+    feasible_seeds = [state for state in roots if limits.violation(state.resources) is None]
+    if not feasible_seeds:
         return SearchResult(
-            policy, "infeasible", objective, limits, initial, None, list(seeds),
-            _pareto_labels(seeds), [], len(seeds), 0, 0.0, {"no_feasible_seed": 1}
+            policy, "no_feasible_seed", objective, limits, initial, None, list(roots),
+            [], [], len(roots), 0, 0.0, {"no_feasible_seed": 1},
+            total_seconds=time.monotonic() - started,
         )
     best = min(
         feasible_seeds,
         key=lambda state: objective.rank(state.resources, state.label),
     )
-    archive = list(seeds)
+    archive = list(feasible_seeds)
     rejections: Counter[str] = Counter()
     backend_calls = 0
     backend_seconds = 0.0
-    evaluated_results: list[tuple[_Proposal, SearchState]] = []
-    lookahead = policy in {"adaptive_lookahead", "static_t_lookahead", "fixed_order"}
-    proposals = _proposal_order(
-        policy, seeds, actions, objective, limits, initial, best, lookahead
-    )
-    for proposal in proposals:
-        if backend_calls >= max_backend_calls:
-            rejections["call_budget"] += 1
-            break
-        if backend_seconds >= max_backend_seconds:
-            rejections["time_budget"] += 1
-            break
-        result = proposal.action.optimizer.optimize(
-            proposal.source.lowered, proposal.action.action
+    verification_seconds = 0.0
+    transformed: list[SearchState] = []
+    seen = {_state_key(state) for state in roots}
+    attempted: set[tuple[str, str, tuple[int, int] | None, int]] = set()
+    root_index = {state.label: state for state in roots}
+    trace: list[DecisionTraceRow] = []
+    while backend_calls < max_backend_calls and time.monotonic() < deadline:
+        proposals = _proposal_order(
+            policy, [*feasible_seeds, *transformed], actions, objective, limits,
+            attempted, root_index, max_depth,
         )
+        if not proposals:
+            break
+        if backend_calls % 3 == 2:
+            continuation = next((item for item in proposals if item.source.depth > 0), None)
+            proposal = continuation or proposals[0]
+        else:
+            proposal = proposals[0]
+        attempted.add((proposal.source.label, proposal.action.name, proposal.region, proposal.allowance))
+        attempt_started = time.monotonic()
+        remaining = deadline - attempt_started
+        if proposal.region is not None:
+            result = proposal.action.optimizer.optimize_region(
+                proposal.source.lowered, proposal.region, proposal.allowance
+            )
+        elif proposal.action.backend == "feynman":
+            result = proposal.action.optimizer.optimize(
+                proposal.source.lowered, proposal.action.action,
+                timeout_seconds=remaining,
+            )
+        elif isinstance(proposal.action.optimizer, PyZXAdapter):
+            result = proposal.action.optimizer.optimize(
+                proposal.source.lowered, proposal.action.action,
+                timeout_seconds=remaining,
+            )
+        else:
+            result = proposal.action.optimizer.optimize(
+                proposal.source.lowered, proposal.action.action
+            )
         backend_calls += 1
         backend_seconds += result.backend_seconds
+        status = "accepted"
+        verification_status = None
+        state = None
+        measured_resources = None
         if not result.verified or result.lowered is None:
-            rejections["backend_failure"] += 1
-            continue
-        verification = verify_optimized_lowered_circuit(
-            proposal.source.lowered, result.lowered,
-            proposal.source.total_error,
-        )
-        if not verification.status.startswith("verified_lowered_"):
-            rejections["verification_inconclusive"] += 1
-            continue
-        resources = estimate_resources(result.lowered)
-        if limits.violation(resources) is not None:
-            rejections["hard_limit"] += 1
-            continue
-        state = SearchState(
-            label=f"{proposal.source.label}|{proposal.action.name}",
-            lowered=result.lowered,
-            resources=resources,
-            verification=verification,
-            objective_value=objective.value(resources),
-            source_seed=proposal.source.source_seed,
-            total_error=proposal.source.total_error,
-            action=proposal.action.name,
-        )
-        archive.append(state)
-        evaluated_results.append((proposal, state))
-
-    improving = [
-        value for value in evaluated_results if _better(value[1], best, objective)
-    ]
-    trace: list[DecisionTraceRow] = []
-    if improving:
-        proposal, endpoint = min(
-            improving,
-            key=lambda value: objective.rank(value[1].resources, value[1].label),
-        )
-        step = 1
-        if proposal.provisional:
-            trace.append(
-                DecisionTraceRow(
-                    step,
-                    "whole_circuit",
-                    f"construction:{proposal.source.source_seed}",
-                    "construction seed exposes a supported exact backend opportunity",
-                    proposal.priority,
-                    initial.resources.t_count,
-                    proposal.source.resources.t_count,
-                    initial.resources.t_depth,
-                    proposal.source.resources.t_depth,
-                    initial.resources.peak_workspace,
-                    proposal.source.resources.peak_workspace,
-                    initial.objective_value,
-                    proposal.source.objective_value,
-                    len(seeds),
-                    0.0,
-                    provisional=True,
-                )
+            status = "timeout" if result.status == "timed_out" else "backend_failure"
+        else:
+            verify_started = time.monotonic()
+            verification = verify_optimized_lowered_circuit(
+                proposal.source.lowered, result.lowered, proposal.source.total_error,
+                ancestry=proposal.source.ancestry,
+                timeout_seconds=max(0.0, deadline - time.monotonic()),
             )
-            step += 1
-        trace.append(
-            DecisionTraceRow(
-                step,
-                "whole_circuit",
-                proposal.action.name,
-                proposal.reason,
-                proposal.priority,
-                proposal.source.resources.t_count,
-                endpoint.resources.t_count,
-                proposal.source.resources.t_depth,
-                endpoint.resources.t_depth,
-                proposal.source.resources.peak_workspace,
-                endpoint.resources.peak_workspace,
-                proposal.source.objective_value,
-                endpoint.objective_value,
-                len(seeds) + backend_calls,
-                backend_seconds,
-            )
-        )
-        best = endpoint
-    else:
-        rejections["no_objective_improvement"] += len(evaluated_results)
+            verification_seconds += time.monotonic() - verify_started
+            verification_status = verification.status
+            if not verification.status.startswith("verified_lowered_"):
+                status = "verification_inconclusive" if "unsupported" in verification.status else "verification_failure"
+            else:
+                resources = estimate_resources(result.lowered)
+                measured_resources = resources
+                if limits.violation(resources) is not None:
+                    status = "hard_limit"
+                else:
+                    label = f"{proposal.source.label}|{proposal.action.name}"
+                    if proposal.region is not None:
+                        label += f":region_{proposal.region[0]}_{proposal.region[1]}"
+                    if proposal.allowance:
+                        label += f":scratch_{proposal.allowance}"
+                    state = SearchState(
+                        label=label, lowered=result.lowered, resources=resources,
+                        verification=verification, objective_value=objective.value(resources),
+                        source_seed=proposal.source.source_seed,
+                        total_error=proposal.source.total_error, action=proposal.action.name,
+                        parent_id=proposal.source.label, depth=proposal.source.depth + 1,
+                        ancestry=(*proposal.source.ancestry, proposal.source.lowered),
+                    )
+                    identity = _state_key(state)
+                    if identity in seen:
+                        if policy.startswith("fixed_") and state.depth == 1 and identity == _state_key(proposal.source):
+                            status = "unchanged"
+                            transformed = sorted(
+                                [*transformed, state],
+                                key=lambda item: objective.rank(item.resources, item.label),
+                            )[:pool_capacity]
+                        else:
+                            status = "no_change_or_cycle"
+                            state = None
+                    else:
+                        seen.add(identity)
+                        archive.append(state)
+                        if _better(state, best, objective):
+                            best = state
+                        transformed = sorted(
+                            [*transformed, state],
+                            key=lambda item: (item is not best, objective.rank(item.resources, item.label)),
+                        )[:pool_capacity]
+        if status not in {"accepted", "unchanged"}:
+            rejections[status] += 1
+        after = measured_resources if measured_resources is not None else proposal.source.resources
+        trace.append(DecisionTraceRow(
+            backend_calls,
+            f"{proposal.region[0]}:{proposal.region[1]}" if proposal.region else "whole_circuit",
+            proposal.action.name, proposal.reason if status == "accepted" else f"{proposal.reason}; {result.reason or status}",
+            proposal.priority, proposal.source.resources.t_count, after.t_count,
+            proposal.source.resources.t_depth, after.t_depth,
+            proposal.source.resources.peak_workspace, after.peak_workspace,
+            proposal.source.objective_value, objective.value(after),
+            len(roots) + backend_calls, time.monotonic() - attempt_started,
+            provisional=state is not None and state is not best,
+            parent_id=proposal.source.label, output_id=state.label if state else None,
+            allowance=proposal.allowance, priority_vector=proposal.priority_vector,
+            status=status, verification_status=verification_status,
+        ))
+    if backend_calls >= max_backend_calls:
+        rejections["call_budget"] += 1
+    elif time.monotonic() >= deadline:
+        rejections["time_budget"] += 1
     return SearchResult(
         policy=policy,
         status="success",
@@ -480,8 +556,10 @@ def run_policy(
         archive=archive,
         pareto_labels=_pareto_labels(archive),
         trace=trace,
-        evaluations=len(seeds) + backend_calls,
+        evaluations=len(roots) + backend_calls,
         backend_calls=backend_calls,
         backend_seconds=backend_seconds,
         rejection_counts=dict(sorted(rejections.items())),
+        total_seconds=time.monotonic() - started,
+        verification_seconds=verification_seconds,
     )

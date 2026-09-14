@@ -1,10 +1,12 @@
 schema_version: 3
 run_id: adaptive-comparison
 manifest: data/manifests/adaptive-development.yaml
-analysis_focus: adaptive_priority_and_lookahead
+analysis_focus: iterative_ancilla_priority
 angles:
   - id: theta_0173
     value: "0.173"
+  - id: theta_exact
+    value: "pi/4"
 total_error_budgets: [1.0e-4]
 workspace_budgets: [8]
 model_profiles: [unitary_clifford_t]
@@ -13,23 +15,19 @@ policies:
   - static_depth
   - static_ancilla
   - static_balanced
-  - static_count_depth
-  - static_count_ancilla
-  - fixed_order
+  - fixed_count_depth
+  - fixed_depth_count
   - adaptive
-  - adaptive_lookahead
-  - static_t_lookahead
+  - frozen
 required_policies:
   - static_t
   - static_depth
   - static_ancilla
   - static_balanced
-  - static_count_depth
-  - static_count_ancilla
-  - fixed_order
+  - fixed_count_depth
+  - fixed_depth_count
   - adaptive
-  - adaptive_lookahead
-  - static_t_lookahead
+  - frozen
 objective:
   mode: balance
   weights: {t_count: 0.9, t_depth: 0.05, ancilla: 0.05}
@@ -46,12 +44,15 @@ backends:
     revision: v0.1.0@2b52a0a78c10999cfc4c1d9c76c994c471cf2350
     timeout_seconds: 20
 search:
-  backend_call_budget: 4
-  backend_seconds_budget: 30
+  backend_call_budget: 12
+  backend_seconds_budget: 60
+  max_depth: 3
+  pool_capacity: 4
   actions:
     - pyzx:zx_extract
     - pyzx:todd
     - feynman:tpar
     - feynman:phasefold
-results_dir: results/raw/adaptive-comparison
+    - phase_ancilla:parallel_phase
+results_dir: results/raw/iterative-ancilla
 diagnosis_path: reports/adaptive-comparison-diagnosis.md
