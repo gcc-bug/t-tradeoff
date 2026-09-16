@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from functools import cmp_to_key
 import math
 from typing import Any
 
@@ -258,32 +259,25 @@ class FinalObjective:
         )
 
     def rank(self, resources: ResourceRecord, label: str) -> tuple:
+        return (self.value(resources), *self.tie_break_key(resources), label)
+
+    def tie_break_key(
+        self, resources: ResourceRecord | tuple[int, int, int]
+    ) -> tuple[int, ...]:
+        if isinstance(resources, ResourceRecord):
+            t_count = resources.t_count
+            t_depth = resources.t_depth
+            ancilla = resources.peak_workspace
+        else:
+            t_count, t_depth, ancilla = resources
         if self.mode == "balance":
-            return (
-                self.value(resources),
-                resources.t_count,
-                resources.t_depth,
-                resources.peak_workspace,
-                label,
-            )
+            return (t_count, t_depth, ancilla)
         values = {
-            "t_count": (
-                resources.t_count,
-                resources.t_depth,
-                resources.peak_workspace,
-            ),
-            "t_depth": (
-                resources.t_depth,
-                resources.t_count,
-                resources.peak_workspace,
-            ),
-            "ancilla": (
-                resources.peak_workspace,
-                resources.t_count,
-                resources.t_depth,
-            ),
+            "t_count": (t_depth, ancilla),
+            "t_depth": (t_count, ancilla),
+            "ancilla": (t_count, t_depth),
         }
-        return (*values[self.metric], label)
+        return values[self.metric]
 
     def to_dict(self) -> dict[str, Any]:
         value: dict[str, Any] = {"mode": self.mode}
@@ -303,7 +297,34 @@ class NoFeasibleAlternativeError(RuntimeError):
     """Raised when valid alternatives exist but every one violates a hard limit."""
 
 
-def _dominates(first: tuple[int, int, int], second: tuple[int, int, int]) -> bool:
+def compare_objective_values(first: float, second: float) -> int:
+    """Compare scalar objectives using the study-wide numeric tie rule."""
+    if not math.isfinite(first) or not math.isfinite(second):
+        raise ValueError("objective values must be finite")
+    if abs(first - second) <= 1e-12:
+        return 0
+    return -1 if first < second else 1
+
+
+def compare_objective_outcomes(
+    objective: FinalObjective,
+    first_value: float,
+    first_resources: tuple[int, int, int],
+    second_value: float,
+    second_resources: tuple[int, int, int],
+) -> int:
+    """Compare objective values, then the declared physical tie-breakers."""
+    scalar = compare_objective_values(first_value, second_value)
+    if scalar:
+        return scalar
+    first_key = objective.tie_break_key(first_resources)
+    second_key = objective.tie_break_key(second_resources)
+    return (first_key > second_key) - (first_key < second_key)
+
+
+def dominates_resources(
+    first: tuple[int, int, int], second: tuple[int, int, int]
+) -> bool:
     return all(a <= b for a, b in zip(first, second, strict=True)) and any(
         a < b for a, b in zip(first, second, strict=True)
     )
@@ -317,16 +338,30 @@ def _nondominated(alternatives: list[EvaluatedAlternative]) -> list[str]:
         if not any(
             other is not item
             and other.resource_tuple is not None
-            and _dominates(other.resource_tuple, item.resource_tuple)
+            and dominates_resources(other.resource_tuple, item.resource_tuple)
             for other in eligible
         ):
             result.append(item.label)
     return sorted(result)
 
 
-def _rank(item: EvaluatedAlternative, objective: FinalObjective) -> tuple:
-    assert item.resources is not None
-    return objective.rank(item.resources, item.label)
+def _compare_alternatives(
+    first: EvaluatedAlternative,
+    second: EvaluatedAlternative,
+    objective: FinalObjective,
+) -> int:
+    assert first.resources is not None and first.resource_tuple is not None
+    assert second.resources is not None and second.resource_tuple is not None
+    result = compare_objective_outcomes(
+        objective,
+        objective.value(first.resources),
+        first.resource_tuple,
+        objective.value(second.resources),
+        second.resource_tuple,
+    )
+    if result:
+        return result
+    return (first.label > second.label) - (first.label < second.label)
 
 
 def evaluate_alternatives(
@@ -449,4 +484,11 @@ def select_evaluated_alternative(
             f"{item.label}: {item.constraint_failure}" for item in eligible
         )
         raise NoFeasibleAlternativeError(f"no feasible alternative: {reasons}")
-    return min(feasible, key=lambda value: _rank(value, normalized_objective))
+    return min(
+        feasible,
+        key=cmp_to_key(
+            lambda first, second: _compare_alternatives(
+                first, second, normalized_objective
+            )
+        ),
+    )

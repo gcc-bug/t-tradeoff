@@ -3,15 +3,19 @@
 ## Gate profiles
 
 `unitary_clifford_t` permits no measurement.  Toffoli is lowered with the
-standard exact ancilla-free 7-T decomposition.  Its reported T-depth comes
-from scheduling the emitted dependency stream; it is not claimed minimal.
+exact ancilla-free seven-T, three-T-layer decomposition from Amy, Maslov,
+Mosca, and Roetteler, arXiv:1206.0758v4, Figure 13. Its reported T-depth still
+comes from scheduling the complete emitted dependency stream; primitive depth
+is not added as an isolated estimate.
 
 `measurement_assisted_clifford_t` remains a declared model boundary, but no
 active HWP implementation emits measurement/feed-forward operations. It is not
 ranked in the schema-v3 adaptive study.
 
 `hwp_adder_unitary` is the primary ordinary-HWP path. For a batch of size `n`,
-it materializes `n` parity inputs and uses `n - popcount(n)` clean carry wires.
+distinct positive singleton predicates use their input wires in place and need
+`n - popcount(n)` clean carry wires. Other predicates use the general copied
+layout with `n` materialized parity inputs plus those clean carries.
 Forward and reverse arithmetic each contain `n - popcount(n)` Toffolis, all
 lowered by the shared exact 7-T decomposition. This unitary cleanup deliberately
 does not claim the lower cost of measurement-assisted uncomputation.
@@ -28,7 +32,11 @@ qubits comes from the current emitted implementation's declared allocation,
 including optimizer-added clean scratch, rather than a construction's declared
 maximum alone. This is allocated logical workspace, not a time-indexed count
 of dirty ancillas. A phase-region action must use and clean every added wire;
-no idle-wire inference or general register-lifetime analysis is implemented.
+only wires from its explicit clean-release certificate may be reused by a
+later local action. No idle-wire inference or general register-lifetime
+analysis is implemented.
+Region proposals reuse the schedule cached for the current state and score the
+target's own T demand, critical-path participation, and slack.
 
 ## Error allocation
 

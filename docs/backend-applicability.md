@@ -22,7 +22,11 @@ Amy, Maslov, and Mosca (arXiv:1303.2042). It is a limited reproduction rather
 than a general matroid-partition/T-par synthesis engine. Existing wires are
 arbitrary live inputs; added wires must start and finish in zero. It does not
 infer cleanliness of an existing idle wire, reassign a data wire, or act across
-Hadamards. Phase regions are rediscovered after each rewrite.
+Hadamards. Phase regions are rediscovered after each rewrite. Scratch wires
+certified clean at the end of one local action form an explicit trailing pool
+that later local actions may reuse; the trace records allocated, reused, and
+released IDs. PyZX and Feynman whole-circuit actions explicitly invalidate that
+pool and any semantic-boundary claim.
 
 The pinned `feynopt` v0.1.0 release archive has SHA-256
 `d3a8d15a4140f159ff87fbc982c7938b985a7ec735e7ac188254639c33b8de0a`.

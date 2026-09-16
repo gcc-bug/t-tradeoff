@@ -14,8 +14,9 @@ The default configuration uses three emitted constructions:
 
 - `compile_independent`: compute, phase, and uncompute each normalized parity;
 - `compile_shared_parity`: reuse an anchor parity walk to reduce CNOT changes;
-- `compile_hwp_adder_unitary`: materialize equal-angle parities, compress their
-  Hamming weight with staged adders, phase the weight bits, and reverse all work.
+- `compile_hwp_adder_unitary`: use eligible singleton inputs in place or
+  materialize general equal-angle parities, compress their Hamming weight with
+  staged adders, phase the weight bits, and reverse all work.
 
 Their entry points are exported from
 [`baselines/__init__.py`](../src/collective_phase/baselines/__init__.py). The
@@ -24,7 +25,7 @@ have been removed from the active package and remain available in Git history.
 
 Exact post-synthesis adapters are in
 [`adapters/`](../src/collective_phase/adapters). PyZX exposes basic
-optimization, TODD/full optimization, and ZX reduction/extraction. The
+optimization, `full_optimize`, and ZX reduction/extraction. The
 optional Feynman subprocess adapter exposes only passes advertised by the
 resolved executable and requires both Feynman's verification and an independent
 PyZX equivalence reduction.
@@ -41,8 +42,8 @@ capability probe and exact diagnostic.
 
 `verify_candidate` checks the ideal construction and clean workspace.
 `verify_lowered_circuit` independently validates rotation matrices, the exact
-Toffoli decomposition, event-to-primitive binding, global phases, and the
-whole-circuit error allocation before returning a compositional certificate.
+seven-T, three-layer Toffoli decomposition, event-to-primitive binding, global
+phases, and the whole-circuit error allocation before returning a compositional certificate.
 `estimate_resources` schedules the actual event dependencies; it does not add
 stage depths as if all gates were serial.
 
@@ -75,11 +76,12 @@ because attribution to arithmetic and synthesized rotations is no longer
 reliable. The current result artifacts also contain the emitted circuits and
 proof chains for the reported Pareto alternatives.
 
-In the historical schema-v3 `hwp_joint_optimization_witness`, the fixed balance objective scores the
-direct seed `(200,50,0)` at `0.9125`. The HWP cap-4 seed is temporarily worse at
-`(190,73,7)`, score `0.917`, but verified PyZX extraction reaches
-`(176,114,7)`, score `0.86425`. Fixed order reaches the same endpoint, so this
-is evidence for the enabling sequence rather than adaptive-policy superiority.
+In the historical schema-v3 `hwp_joint_optimization_witness`, the fixed balance
+objective scores the direct seed `(200,50,0)` at `0.9125`. The then-current HWP
+cap-4 seed was `(190,73,7)` and verified PyZX extraction reached
+`(176,114,7)`. Those values remain historical. The repaired in-place
+construction and three-layer primitive lowering are measured separately in the
+HWP audit; they do not retroactively establish adaptive-policy superiority.
 The new study records every attempt and charges matched static portfolios for
 their combined compilation cost. See `reports/iterative-ancilla.md` for the
 balanced study and `reports/ancilla-depth.md` for the exact ancilla-for-depth

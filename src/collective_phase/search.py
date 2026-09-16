@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict, dataclass, field
+from functools import cmp_to_key
 import hashlib
 import json
 import time
 from typing import Protocol
 
 from .adapters import AdapterResult, PyZXAdapter
-from .adapters.phase_ancilla import PhaseAncillaAdapter, phase_regions
+from .adapters.phase_ancilla import (
+    PhaseAncillaAdapter,
+    certified_scratch_pool,
+    phase_regions,
+)
 from .baselines import (
     compile_hwp_adder_unitary_alternatives,
     compile_independent,
@@ -17,11 +22,18 @@ from .baselines import (
 from .baselines.common import CompilationConstraints
 from .ir import PhaseProgram
 from .lowering import LoweredCircuit, RotationSynthesizer
-from .resources import ResourceRecord, estimate_resources, schedule_events
+from .resources import (
+    ResourceRecord,
+    ScheduleRecord,
+    estimate_resources,
+    schedule_events,
+)
 from .selection import (
     EvaluatedAlternative,
     FinalObjective,
     SelectionLimits,
+    compare_objective_outcomes,
+    dominates_resources,
     evaluate_alternatives,
 )
 from .verification import (
@@ -53,6 +65,7 @@ class SearchState:
     objective_value: float
     source_seed: str
     total_error: float
+    schedule: ScheduleRecord | None = field(default=None, repr=False)
     action: str = "construction_seed"
     parent_id: str | None = None
     depth: int = 0
@@ -91,6 +104,10 @@ class DecisionTraceRow:
     priority_vector: tuple[float, float, float] = (0.0, 0.0, 0.0)
     status: str = "accepted"
     verification_status: str | None = None
+    scratch_wire_ids: tuple[int, ...] = ()
+    allocated_scratch_wire_ids: tuple[int, ...] = ()
+    reused_scratch_wire_ids: tuple[int, ...] = ()
+    released_scratch_wire_ids: tuple[int, ...] = ()
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -181,19 +198,14 @@ def construction_seeds(
                 objective_value=objective.value(item.resources),
                 source_seed=label,
                 total_error=total_error,
+                schedule=schedule_events(item.lowered.events),
             )
         )
     return states
 
 
 def _dominates(first: SearchState, second: SearchState) -> bool:
-    return all(
-        left <= right
-        for left, right in zip(first.resource_tuple, second.resource_tuple, strict=True)
-    ) and any(
-        left < right
-        for left, right in zip(first.resource_tuple, second.resource_tuple, strict=True)
-    )
+    return dominates_resources(first.resource_tuple, second.resource_tuple)
 
 
 def _pareto_labels(states: list[SearchState]) -> list[str]:
@@ -232,10 +244,34 @@ def _adaptive_priority(
     objective: FinalObjective,
     limits: SelectionLimits,
     allowance: int,
+    region: tuple[int, int] | None,
 ) -> tuple[float, str, tuple[float, float, float]]:
-    schedule = schedule_events(state.lowered.events)
+    schedule = state.schedule
+    if schedule is None:
+        schedule = schedule_events(state.lowered.events)
+        state.schedule = schedule
+    start, stop = region or (0, len(state.lowered.events))
+    target_t_events = [
+        index
+        for index in range(start, stop)
+        if getattr(state.lowered.events[index], "kind", "") in {"t", "tdg"}
+    ]
+    critical = set(schedule.critical_t_events)
+    target_critical = sum(index in critical for index in target_t_events)
     critical_fraction = (
-        len(schedule.critical_t_events) / schedule.t_count if schedule.t_count else 0.0
+        target_critical / len(target_t_events) if target_t_events else 0.0
+    )
+    demand_fraction = (
+        len(target_t_events) / schedule.t_count if schedule.t_count else 0.0
+    )
+    mean_slack = (
+        sum(schedule.event_slack[index] for index in target_t_events)
+        / len(target_t_events)
+        if target_t_events
+        else 0.0
+    )
+    additional_scratch = max(
+        0, allowance - len(certified_scratch_pool(state.lowered))
     )
     weights = _objective_weights(objective)
     pressure = _constraint_pressure(state.resources, limits)
@@ -244,45 +280,57 @@ def _adaptive_priority(
         for weight, constraint in zip(weights, pressure, strict=True)
     )
     evidence = (
-        action.orientation[0],
-        action.orientation[1] * (0.5 + critical_fraction),
-        action.orientation[2] - allowance / objective.ancilla_reference,
+        action.orientation[0] * (0.5 + demand_fraction),
+        action.orientation[1] * (0.5 + critical_fraction / (1.0 + mean_slack)),
+        action.orientation[2]
+        - additional_scratch / objective.ancilla_reference,
     )
     priority = sum(
         need * support for need, support in zip(demand, evidence, strict=True)
     )
     if allowance:
         reason = (
-            f"{len(schedule.critical_t_events)}/{schedule.t_count} T gates on "
-            f"critical paths; {allowance} clean scratch wires requested "
-            "for a supported CNOT/phase region; depth gain is unproven"
+            f"target has {len(target_t_events)} T gates, {target_critical} critical, "
+            f"mean T-slack {mean_slack:.3f}; {allowance} clean scratch wires "
+            f"requested ({additional_scratch} newly allocated) at a certified "
+            "CNOT/phase boundary; gain is unproven"
         )
     elif action.orientation[1] >= action.orientation[0]:
         reason = (
-            f"{len(schedule.critical_t_events)}/{schedule.t_count} T gates are "
-            "on a critical dependency path; prioritize depth resynthesis"
+            f"target has {target_critical}/{len(target_t_events)} critical T gates "
+            f"and mean T-slack {mean_slack:.3f}; consider depth resynthesis"
         )
     else:
         reason = (
-            f"count priority {demand[0]:.3f}; "
-            f"{sum(value > 0 for value in schedule.event_slack)} current events have T-slack"
+            f"target contains {len(target_t_events)}/{schedule.t_count} T gates; "
+            f"count pressure is {demand[0]:.3f}"
         )
     return priority, reason, demand
 
 
-def _static_priority(policy: str, action: ActionSpec, allowance: int) -> tuple[float, str, tuple[float, float, float]]:
+def _static_priority(
+    state: SearchState,
+    policy: str,
+    action: ActionSpec,
+    allowance: int,
+    objective: FinalObjective,
+) -> tuple[float, str, tuple[float, float, float]]:
     weights = {
         "static_t": (1.0, 0.0, 0.0),
         "static_depth": (0.0, 1.0, 0.0),
         "static_ancilla": (0.0, 0.0, 1.0),
         "static_balanced": (1 / 3, 1 / 3, 1 / 3),
     }.get(policy, (1.0, 0.0, 0.0))
+    additional_scratch = max(
+        0, allowance - len(certified_scratch_pool(state.lowered))
+    )
     return (
         sum(
             weight * support
             for weight, support in zip(
                 weights, (action.orientation[0], action.orientation[1],
-                          action.orientation[2] - allowance), strict=True
+                          action.orientation[2] - additional_scratch / objective.ancilla_reference),
+                strict=True,
             )
         ),
         f"fixed {policy.removeprefix('static_')} action priority",
@@ -305,8 +353,6 @@ def _proposal_order(
         if source.depth >= max_depth or limits.violation(source.resources) is not None:
             continue
         for action in actions:
-            if action.backend == "phase_ancilla" and source.action == action.name:
-                continue
             if policy.startswith("fixed_"):
                 names = (
                     ("pyzx:zx_extract", "phase_ancilla:parallel_phase")
@@ -318,19 +364,40 @@ def _proposal_order(
             regions = phase_regions(source.lowered.events) if action.backend == "phase_ancilla" else [None]
             for region in regions:
                 for allowance in action.scratch_allowances:
-                    if (source.label, action.name, region, allowance) in attempted:
+                    source_identity = _state_key(source)
+                    if (source_identity, action.name, region, allowance) in attempted:
                         continue
-                    if limits.ancilla is not None and source.resources.peak_workspace + allowance > limits.ancilla:
+                    additional_scratch = max(
+                        0,
+                        allowance
+                        - len(certified_scratch_pool(source.lowered)),
+                    )
+                    if (
+                        limits.ancilla is not None
+                        and source.resources.peak_workspace + additional_scratch
+                        > limits.ancilla
+                    ):
                         continue
                     if policy == "adaptive":
-                        priority, reason, vector = _adaptive_priority(source, action, objective, limits, allowance)
+                        priority, reason, vector = _adaptive_priority(
+                            source, action, objective, limits, allowance, region
+                        )
                     elif policy == "frozen":
-                        priority, reason, vector = _adaptive_priority(roots[source.source_seed], action, objective, limits, allowance)
+                        priority, reason, vector = _adaptive_priority(
+                            roots[source.source_seed],
+                            action,
+                            objective,
+                            limits,
+                            allowance,
+                            None,
+                        )
                         reason = "frozen seed priority; " + reason
                     elif policy.startswith("fixed_"):
                         priority, reason, vector = float(max_depth - source.depth), "predeclared successive pass sequence", (0.0, 0.0, 0.0)
                     else:
-                        priority, reason, vector = _static_priority(policy, action, allowance)
+                        priority, reason, vector = _static_priority(
+                            source, policy, action, allowance, objective
+                        )
                     proposals.append(_Proposal(source, action, priority, reason, source.depth > 0, region, allowance, vector))
     return sorted(
         proposals,
@@ -345,15 +412,34 @@ def _proposal_order(
 
 
 def _better(first: SearchState, second: SearchState, objective: FinalObjective) -> bool:
-    return objective.rank(first.resources, first.label) < objective.rank(
-        second.resources, second.label
+    return _compare_states(first, second, objective) < 0
+
+
+def _compare_states(
+    first: SearchState, second: SearchState, objective: FinalObjective
+) -> int:
+    result = compare_objective_outcomes(
+        objective,
+        first.objective_value,
+        first.resource_tuple,
+        second.objective_value,
+        second.resource_tuple,
     )
+    if result:
+        return result
+    return (first.label > second.label) - (first.label < second.label)
 
 
 def default_actions(pyzx: Optimizer, feynman: Optimizer | None = None) -> list[ActionSpec]:
     actions = [
         ActionSpec("pyzx:zx_extract", "pyzx", "zx_extract", (1.0, 0.7, 0.0), pyzx),
-        ActionSpec("pyzx:todd", "pyzx", "todd", (1.0, 0.4, 0.0), pyzx),
+        ActionSpec(
+            "pyzx:full_optimize",
+            "pyzx",
+            "full_optimize",
+            (1.0, 0.4, 0.0),
+            pyzx,
+        ),
     ]
     if feynman is not None:
         actions.extend(
@@ -422,7 +508,9 @@ def run_policy(
         )
     best = min(
         feasible_seeds,
-        key=lambda state: objective.rank(state.resources, state.label),
+        key=cmp_to_key(
+            lambda first, second: _compare_states(first, second, objective)
+        ),
     )
     archive = list(feasible_seeds)
     rejections: Counter[str] = Counter()
@@ -446,7 +534,14 @@ def run_policy(
             proposal = continuation or proposals[0]
         else:
             proposal = proposals[0]
-        attempted.add((proposal.source.label, proposal.action.name, proposal.region, proposal.allowance))
+        attempted.add(
+            (
+                _state_key(proposal.source),
+                proposal.action.name,
+                proposal.region,
+                proposal.allowance,
+            )
+        )
         attempt_started = time.monotonic()
         remaining = deadline - attempt_started
         if proposal.region is not None:
@@ -504,6 +599,7 @@ def run_policy(
                         total_error=proposal.source.total_error, action=proposal.action.name,
                         parent_id=proposal.source.label, depth=proposal.source.depth + 1,
                         ancestry=(*proposal.source.ancestry, proposal.source.lowered),
+                        schedule=schedule_events(result.lowered.events),
                     )
                     identity = _state_key(state)
                     if identity in seen:
@@ -511,7 +607,11 @@ def run_policy(
                             status = "unchanged"
                             transformed = sorted(
                                 [*transformed, state],
-                                key=lambda item: objective.rank(item.resources, item.label),
+                                key=cmp_to_key(
+                                    lambda first, second: _compare_states(
+                                        first, second, objective
+                                    )
+                                ),
                             )[:pool_capacity]
                         else:
                             status = "no_change_or_cycle"
@@ -523,11 +623,20 @@ def run_policy(
                             best = state
                         transformed = sorted(
                             [*transformed, state],
-                            key=lambda item: (item is not best, objective.rank(item.resources, item.label)),
+                            key=cmp_to_key(
+                                lambda first, second: _compare_states(
+                                    first, second, objective
+                                )
+                            ),
                         )[:pool_capacity]
         if status not in {"accepted", "unchanged"}:
             rejections[status] += 1
         after = measured_resources if measured_resources is not None else proposal.source.resources
+        optimization = (
+            result.lowered.optimization
+            if result.lowered is not None and result.lowered.optimization is not None
+            else {}
+        )
         trace.append(DecisionTraceRow(
             backend_calls,
             f"{proposal.region[0]}:{proposal.region[1]}" if proposal.region else "whole_circuit",
@@ -541,6 +650,16 @@ def run_policy(
             parent_id=proposal.source.label, output_id=state.label if state else None,
             allowance=proposal.allowance, priority_vector=proposal.priority_vector,
             status=status, verification_status=verification_status,
+            scratch_wire_ids=tuple(optimization.get("scratch_wire_ids", ())),
+            allocated_scratch_wire_ids=tuple(
+                optimization.get("allocated_scratch_wire_ids", ())
+            ),
+            reused_scratch_wire_ids=tuple(
+                optimization.get("reused_scratch_wire_ids", ())
+            ),
+            released_scratch_wire_ids=tuple(
+                optimization.get("released_scratch_wire_ids", ())
+            ),
         ))
     if backend_calls >= max_backend_calls:
         rejections["call_budget"] += 1

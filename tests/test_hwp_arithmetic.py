@@ -10,10 +10,17 @@ from collective_phase.baselines.arithmetic import (
     hamming_weight_compute,
     hwp_adder_workspace,
     hwp_compressor_count,
+    hwp_in_place_workspace,
     invert_classical_operations,
 )
 from collective_phase.baselines.common import CompilationConstraints
-from collective_phase.ir import AngleBinding, make_program
+from collective_phase.ir import (
+    AngleBinding,
+    ParityTerm,
+    PhaseBlock,
+    PhaseProgram,
+    make_program,
+)
 from collective_phase.verification import verify_candidate
 
 
@@ -87,7 +94,7 @@ def test_adder_hwp_emits_linear_arithmetic_and_unitary_cleanup(size):
         CompilationConstraints(None, "unitary_clifford_t", hwp_search_cap=8),
     )
     expected_compressors = hwp_compressor_count(size)
-    assert candidate.workspace_qubits == hwp_adder_workspace(size)
+    assert candidate.workspace_qubits == hwp_in_place_workspace(size)
     assert sum(operation.kind == "toffoli" for operation in candidate.operations) == (
         2 * expected_compressors
     )
@@ -95,6 +102,78 @@ def test_adder_hwp_emits_linear_arithmetic_and_unitary_cleanup(size):
         size.bit_length() if size > 1 else 1
     )
     assert verify_candidate(candidate).status == "verified_ideal_semantics"
+
+
+def test_copied_hwp_layout_remains_available_as_construction_reference():
+    program = make_program(
+        "copied", 4, [1, 2, 4, 8], AngleBinding("theta", "pi/4")
+    )
+    candidate = compile_hwp_adder_unitary(
+        program,
+        CompilationConstraints(None, "unitary_clifford_t", hwp_search_cap=4),
+        layout="copied_parities",
+    )
+    assert candidate.workspace_qubits == hwp_adder_workspace(4)
+    batches = [
+        item
+        for item in candidate.transformation_trace
+        if item["action"] == "hwp_adder_unitary_batch"
+    ]
+    assert [item["layout"] for item in batches] == ["copied_parities"]
+    assert verify_candidate(candidate).status == "verified_ideal_semantics"
+
+
+def test_in_place_hwp_is_not_applied_to_dependent_predicates():
+    program = make_program(
+        "dependent", 2, [1, 2, 3], AngleBinding("theta", "pi/4")
+    )
+    automatic = compile_hwp_adder_unitary(
+        program, CompilationConstraints(8, "unitary_clifford_t")
+    )
+    forced = compile_hwp_adder_unitary(
+        program,
+        CompilationConstraints(8, "unitary_clifford_t"),
+        layout="in_place_inputs",
+    )
+    automatic_batches = [
+        item
+        for item in automatic.transformation_trace
+        if item["action"] == "hwp_adder_unitary_batch"
+    ]
+    assert [item["layout"] for item in automatic_batches] == ["copied_parities"]
+    assert forced.workspace_qubits == 0
+    assert all(operation.kind != "toffoli" for operation in forced.operations)
+    assert verify_candidate(forced).status == "verified_ideal_semantics"
+
+
+def test_in_place_hwp_is_not_applied_to_repeated_or_complemented_inputs():
+    angle = AngleBinding("theta", "pi/4")
+    repeated = make_program("repeated", 2, [1, 1, 2, 2], angle)
+    complemented = PhaseProgram(
+        "complemented",
+        2,
+        (angle,),
+        (
+            PhaseBlock(
+                "block",
+                (
+                    ParityTerm("left", 1, "theta", offset=True, coefficient=-1),
+                    ParityTerm("right", 2, "theta", offset=True, coefficient=-1),
+                ),
+            ),
+        ),
+    )
+    for program in (repeated, complemented):
+        candidate = compile_hwp_adder_unitary(
+            program, CompilationConstraints(8, "unitary_clifford_t")
+        )
+        layouts = [
+            item["layout"]
+            for item in candidate.transformation_trace
+            if item["action"] == "hwp_adder_unitary_batch"
+        ]
+        assert layouts == ["copied_parities"]
+        assert verify_candidate(candidate).status == "verified_ideal_semantics"
 
 
 def test_adder_hwp_alternatives_record_distinct_batch_limits():

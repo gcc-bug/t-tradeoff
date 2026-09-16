@@ -7,6 +7,7 @@ from .arithmetic import (
     hamming_weight_compute,
     hwp_adder_workspace,
     hwp_compressor_count,
+    hwp_in_place_workspace,
     invert_classical_operations,
 )
 from .common import (
@@ -19,10 +20,31 @@ from .common import (
 )
 
 
+def _is_in_place_group(program: PhaseProgram, group: CompatibleGroup) -> bool:
+    """Recognize only distinct, positive, unweighted data-wire predicates."""
+    source_terms = {term.id: term for term in program.terms}
+    if group.coefficient != 1:
+        return False
+    masks = [term.mask for term in group.terms]
+    if len(set(masks)) != len(masks):
+        return False
+    for term in group.terms:
+        if term.mask <= 0 or term.mask & (term.mask - 1):
+            return False
+        if len(term.source_term_ids) != 1:
+            return False
+        source = source_terms[term.source_term_ids[0]]
+        if source.offset or source.coefficient != 1:
+            return False
+    return True
+
+
 def _emit_adder_batch(
     program: PhaseProgram,
     group: CompatibleGroup,
     batch: list,
+    *,
+    layout: str,
 ) -> tuple[list[Operation], int, dict]:
     size = len(batch)
     if size < 2:
@@ -34,20 +56,32 @@ def _emit_adder_batch(
             "term_ids": [batch[0].id],
         }
 
-    parity = tuple(range(program.qubit_count, program.qubit_count + size))
     carry_count = hwp_compressor_count(size)
-    carries = tuple(
-        range(
-            program.qubit_count + size,
-            program.qubit_count + size + carry_count,
+    layout_name = layout
+    if layout_name == "in_place_inputs":
+        parity = tuple(term.mask.bit_length() - 1 for term in batch)
+        workspace = hwp_in_place_workspace(size)
+        carries = tuple(
+            range(program.qubit_count, program.qubit_count + carry_count)
         )
-    )
-    operations = []
-    for term, target in zip(batch, parity, strict=True):
-        append_parity_into(operations, term.mask, target)
-    arithmetic, layout = hamming_weight_compute(parity, carries)
+        operations: list[Operation] = []
+    elif layout_name == "copied_parities":
+        parity = tuple(range(program.qubit_count, program.qubit_count + size))
+        workspace = hwp_adder_workspace(size)
+        carries = tuple(
+            range(
+                program.qubit_count + size,
+                program.qubit_count + size + carry_count,
+            )
+        )
+        operations = []
+        for term, target in zip(batch, parity, strict=True):
+            append_parity_into(operations, term.mask, target)
+    else:
+        raise ValueError(f"unsupported HWP layout {layout_name!r}")
+    arithmetic, weight_layout = hamming_weight_compute(parity, carries)
     operations.extend(arithmetic)
-    for bit, target in enumerate(layout.output_qubits):
+    for bit, target in enumerate(weight_layout.output_qubits):
         operations.append(
             Operation(
                 "phase",
@@ -57,9 +91,10 @@ def _emit_adder_batch(
             )
         )
     operations.extend(invert_classical_operations(arithmetic))
-    for term, target in reversed(list(zip(batch, parity, strict=True))):
-        append_parity_into(operations, term.mask, target)
-    return operations, hwp_adder_workspace(size), {
+    if layout_name == "copied_parities":
+        for term, target in reversed(list(zip(batch, parity, strict=True))):
+            append_parity_into(operations, term.mask, target)
+    return operations, workspace, {
         "action": "hwp_adder_unitary_batch",
         "group_id": group.id,
         "block_id": group.block_id,
@@ -67,11 +102,13 @@ def _emit_adder_batch(
         "coefficient": group.coefficient,
         "term_ids": [term.id for term in batch],
         "size": size,
+        "layout": layout_name,
+        "data_restored": True,
         "parity_qubits": list(parity),
-        "weight_qubits": list(layout.output_qubits),
-        "retained_garbage_qubits": list(layout.garbage_qubits),
-        "carry_qubits": list(layout.carry_qubits),
-        "stage_widths": list(layout.stage_widths),
+        "weight_qubits": list(weight_layout.output_qubits),
+        "retained_garbage_qubits": list(weight_layout.garbage_qubits),
+        "carry_qubits": list(weight_layout.carry_qubits),
+        "stage_widths": list(weight_layout.stage_widths),
         "arithmetic": "staged_3_to_2_and_2_to_2_compressors",
         "forward_toffolis": carry_count,
         "unitary_cleanup_toffolis": carry_count,
@@ -83,6 +120,7 @@ def compile_hwp_adder_unitary(
     constraints: CompilationConstraints,
     *,
     batch_limit: int | None = None,
+    layout: str = "auto",
 ) -> Candidate:
     """Compile ordinary HWP using an emitted linear-size compressor network."""
     if constraints.model_profile != "unitary_clifford_t":
@@ -92,6 +130,8 @@ def compile_hwp_adder_unitary(
             "the audited adder HWP is a unitary adaptation; measured cleanup is not emitted",
             model_profile=constraints.model_profile,
         )
+    if layout not in {"auto", "copied_parities", "in_place_inputs"}:
+        raise ValueError(f"unsupported HWP layout {layout!r}")
     normalized = preprocess(program)
     limit = batch_limit or constraints.hwp_search_cap
     operations: list[Operation] = []
@@ -101,10 +141,33 @@ def compile_hwp_adder_unitary(
 
     for group in normalized.groups:
         terms = list(group.terms)
+        in_place = _is_in_place_group(program, group)
+        if layout == "in_place_inputs" and not in_place:
+            for term in terms:
+                append_direct_term(operations, term)
+            trace.append(
+                {
+                    "action": "direct_group_fallback",
+                    "group_id": group.id,
+                    "reason": "in-place HWP requires distinct positive singleton predicates",
+                    "term_ids": [term.id for term in terms],
+                }
+            )
+            continue
+        group_layout = (
+            "in_place_inputs"
+            if in_place and layout in {"auto", "in_place_inputs"}
+            else "copied_parities"
+        )
+        workspace_for = (
+            hwp_in_place_workspace
+            if group_layout == "in_place_inputs"
+            else hwp_adder_workspace
+        )
         capacity = max_batch_size(
             min(len(terms), limit),
             constraints.workspace_budget,
-            hwp_adder_workspace,
+            workspace_for,
         )
         if len(terms) < 2 or capacity < 2:
             for term in terms:
@@ -121,7 +184,7 @@ def compile_hwp_adder_unitary(
         sizes = batch_sizes(len(terms), capacity, "balanced")
         for batch in chunks(terms, sizes):
             batch_operations, workspace, batch_trace = _emit_adder_batch(
-                program, group, batch
+                program, group, batch, layout=group_layout
             )
             operations.extend(batch_operations)
             peak_workspace = max(peak_workspace, workspace)
@@ -130,7 +193,7 @@ def compile_hwp_adder_unitary(
 
     return Candidate(
         method="hwp_adder_unitary",
-        version="0.3",
+        version="0.4",
         program=program,
         status="success",
         operations=operations,
@@ -141,8 +204,9 @@ def compile_hwp_adder_unitary(
             "workspace_budget": constraints.workspace_budget,
             "batch_limit": limit,
             "batch_policy": "balanced_for_fixed_limit",
+            "layout": layout,
             "collective_batches": collective_batches,
-            "workspace_scope": "parity_materialization_plus_clean_carries",
+            "workspace_scope": "clean_carries_with_in_place_data_when_applicable",
             "cleanup_model": "unitary_reverse_of_compute",
             "source": "Kivlichan et al. arXiv:1902.10673v4 Appendix A.1",
         },
@@ -154,7 +218,7 @@ def compile_hwp_adder_unitary(
         ],
         accounting_status="emitted",
         implementation_family="ordinary_hwp",
-        variant=f"adder_compressor_unitary_cap_{limit}",
+        variant=f"adder_compressor_unitary_{layout}_cap_{limit}",
         objective=constraints.objective,
         preprocessing_version=PREPROCESSING_VERSION,
     )

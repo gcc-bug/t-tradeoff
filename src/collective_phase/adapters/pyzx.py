@@ -15,7 +15,7 @@ from .common import AdapterResult
 
 
 PYZX_REVISION = "0.9.0"
-PYZX_ACTIONS = frozenset({"basic", "todd", "zx_extract"})
+PYZX_ACTIONS = frozenset({"basic", "full_optimize", "zx_extract"})
 
 
 def _event_hash(lowered: LoweredCircuit) -> str:
@@ -92,7 +92,7 @@ class PyZXAdapter:
             try:
                 if action == "basic":
                     result = pyzx.optimize.basic_optimization(source.copy())
-                elif action == "todd":
+                elif action == "full_optimize":
                     result = pyzx.optimize.full_optimize(source.copy())
                 else:
                     graph = source.to_graph()
@@ -117,6 +117,9 @@ class PyZXAdapter:
                     "backend": "pyzx",
                     "revision": PYZX_REVISION,
                     "action": action,
+                    "scope": "whole_circuit",
+                    "semantic_boundaries": "invalidated",
+                    "clean_scratch_pool": [],
                     "seed": self.seed,
                     "input_event_hash": _event_hash(lowered),
                     "equivalence": "pyzx_full_reduce_up_to_global_phase",

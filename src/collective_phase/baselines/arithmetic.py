@@ -27,6 +27,13 @@ def hwp_adder_workspace(input_count: int) -> int:
     return input_count + hwp_compressor_count(input_count)
 
 
+def hwp_in_place_workspace(input_count: int) -> int:
+    """Clean carries needed when HWP can overwrite independent data inputs."""
+    if input_count <= 1:
+        return 0
+    return hwp_compressor_count(input_count)
+
+
 def append_three_to_two_compressor(
     operations: list[Operation], a: int, b: int, c: int, carry: int
 ) -> None:

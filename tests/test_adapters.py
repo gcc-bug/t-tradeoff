@@ -61,11 +61,42 @@ def test_clean_scratch_phase_rewrite_measures_tradeoff_and_rejects_dirty_output(
         assert verify_optimized_lowered_circuit(source, dirty, 1e-4, memory_cap_bytes=1).status == "verification_failure"
 
 
+def test_distinct_phase_regions_reuse_certified_clean_scratch():
+    source = _hwp_lowered()
+    live = source.candidate.program.qubit_count + source.candidate.workspace_qubits
+    adapter = PhaseAncillaAdapter()
+    first_region = phase_regions(source.events)[0]
+    first = adapter.optimize_region(source, first_region, 2)
+    assert first.verified, first.reason
+    assert first.lowered is not None
+    first_metadata = first.lowered.optimization
+    assert first_metadata is not None
+    assert first_metadata["allocated_scratch_wire_ids"] == [live, live + 1]
+    assert first_metadata["released_scratch_wire_ids"] == [live, live + 1]
+    assert verify_optimized_lowered_circuit(
+        source, first.lowered, 1e-4
+    ).status.startswith("verified_lowered_")
+
+    second_region = phase_regions(first.lowered.events)[-1]
+    second = adapter.optimize_region(first.lowered, second_region, 2)
+    assert second.verified, second.reason
+    assert second.lowered is not None
+    second_metadata = second.lowered.optimization
+    assert second_metadata is not None
+    assert second_metadata["allocated_scratch_wire_ids"] == []
+    assert second_metadata["reused_scratch_wire_ids"] == [live, live + 1]
+    assert second_metadata["released_scratch_wire_ids"] == [live, live + 1]
+    assert second.lowered.allocated_qubits == first.lowered.allocated_qubits
+    assert verify_optimized_lowered_circuit(
+        first.lowered, second.lowered, 1e-4, ancestry=(source,)
+    ).status.startswith("verified_lowered_")
+
+
 def test_optimized_parent_requires_valid_full_chain():
     source = _ccz_phase_lowered()
     parent = PhaseAncillaAdapter().optimize_region(source, phase_regions(source.events)[0], 1).lowered
     assert parent is not None
-    child = PyZXAdapter(seed=0).optimize(parent, "todd").lowered
+    child = PyZXAdapter(seed=0).optimize(parent, "full_optimize").lowered
     assert child is not None
     assert verify_optimized_lowered_circuit(parent, child, 1e-4).status == "lowered_evidence_unsupported"
     assert verify_optimized_lowered_circuit(parent, child, 1e-4, ancestry=(source,), memory_cap_bytes=1).status.startswith("verified_lowered_")
@@ -80,6 +111,8 @@ def test_pyzx_exact_rewrite_is_verified_and_recounted():
     result = PyZXAdapter(seed=0).optimize(source, "zx_extract")
     assert result.verified, result.reason
     assert result.lowered is not None
+    assert result.lowered.optimization["semantic_boundaries"] == "invalidated"
+    assert result.lowered.optimization["clean_scratch_pool"] == []
     verification = verify_optimized_lowered_circuit(source, result.lowered, 1e-4)
     assert verification.status == "verified_lowered_external_dense"
     before = estimate_resources(source)
@@ -95,7 +128,9 @@ def test_pyzx_worker_enforces_search_deadline(monkeypatch):
     import pyzx
 
     monkeypatch.setattr(pyzx.optimize, "full_optimize", lambda circuit: time.sleep(2))
-    result = PyZXAdapter(seed=0).optimize(_hwp_lowered(), "todd", timeout_seconds=0.05)
+    result = PyZXAdapter(seed=0).optimize(
+        _hwp_lowered(), "full_optimize", timeout_seconds=0.05
+    )
     assert result.status == "timed_out"
     assert result.lowered is None
     assert result.backend_seconds < 1
@@ -103,7 +138,7 @@ def test_pyzx_worker_enforces_search_deadline(monkeypatch):
 
 def test_external_verifier_rejects_mutated_optimizer_stream():
     source = _hwp_lowered()
-    result = PyZXAdapter(seed=0).optimize(source, "todd")
+    result = PyZXAdapter(seed=0).optimize(source, "full_optimize")
     assert result.lowered is not None
     mutated = replace(
         result.lowered,

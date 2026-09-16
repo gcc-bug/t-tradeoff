@@ -50,7 +50,7 @@ search:
   pool_capacity: 4
   actions:
     - pyzx:zx_extract
-    - pyzx:todd
+    - pyzx:full_optimize
     - feynman:tpar
     - feynman:phasefold
     - phase_ancilla:parallel_phase

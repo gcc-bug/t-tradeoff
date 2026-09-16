@@ -27,6 +27,6 @@ search:
   backend_seconds_budget: 60
   max_depth: 3
   pool_capacity: 4
-  actions: [pyzx:zx_extract, pyzx:todd, feynman:tpar, feynman:phasefold, phase_ancilla:parallel_phase]
+  actions: [pyzx:zx_extract, pyzx:full_optimize, feynman:tpar, feynman:phasefold, phase_ancilla:parallel_phase]
 results_dir: results/raw/ancilla-depth-diagnostic
 diagnosis_path: reports/ancilla-depth-diagnosis.md

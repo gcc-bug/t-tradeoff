@@ -11,6 +11,8 @@ from collective_phase.selection import (
     FinalObjective,
     NoFeasibleAlternativeError,
     SelectionLimits,
+    compare_objective_outcomes,
+    compare_objective_values,
     select_lowered_candidate,
 )
 from collective_phase.verification import LoweredVerificationResult
@@ -96,6 +98,17 @@ def test_balance_objective_uses_fixed_positive_references():
     assert objective.weights == (1.0, 2.0, 0.5)
     assert objective.references == (100.0, 20.0, 4.0)
     assert objective.to_dict()["references"]["ancilla"] == 4.0
+
+
+def test_shared_objective_comparison_separates_scalar_ties_from_tie_breaks():
+    objective = FinalObjective(metric="t_count")
+    assert compare_objective_values(10.0, 10.0 + 5e-13) == 0
+    assert compare_objective_outcomes(
+        objective, 10.0, (10, 4, 2), 10.0, (10, 5, 0)
+    ) == -1
+    assert compare_objective_outcomes(
+        objective, 10.0, (10, 4, 2), 9.0, (9, 20, 0)
+    ) == 1
 
 
 @pytest.mark.parametrize(

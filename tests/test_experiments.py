@@ -220,6 +220,8 @@ def test_report_distinguishes_static_portfolio_and_fixed_sequences(study):
 
     assert "static-preference portfolio: 1 wins, 0 ties" in report
     assert "fixed successive-sequence portfolio: 0 wins, 1 ties" in report
+    assert "Within scalar ties, physical tie-breaks" in report
+    assert "Pareto relation is" in report
 
 
 def test_audit_reports_optional_backend_blocker(study):

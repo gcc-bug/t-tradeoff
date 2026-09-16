@@ -4,7 +4,15 @@ from collective_phase.adapters import AdapterResult, PyZXAdapter
 from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer
-from collective_phase.search import ActionSpec, construction_seeds, default_actions, run_policy
+from collective_phase.search import (
+    ActionSpec,
+    SearchState,
+    _adaptive_priority,
+    construction_seeds,
+    default_actions,
+    run_policy,
+)
+from collective_phase.resources import estimate_resources, schedule_events
 from collective_phase.selection import FinalObjective, SelectionLimits
 
 
@@ -222,3 +230,46 @@ def test_adaptive_priority_recounts_a_real_transformed_parent(tmp_path):
     assert continuation.parent_id == first.output_id
     assert continuation.priority_vector[1] < first.priority_vector[1]
     assert continuation.d_before == first.d_after
+
+
+def test_region_priority_distinguishes_critical_path_from_slack(tmp_path):
+    program = make_program("one", 1, [1], AngleBinding("theta", "pi/4"))
+    objective = FinalObjective(metric="t_depth")
+    seed = construction_seeds(
+        program,
+        CompilationConstraints(0, "unitary_clifford_t"),
+        1e-4,
+        RotationSynthesizer(tmp_path / "region-priority.json"),
+        objective,
+    )[0]
+    events = [
+        *(GateEvent("t", (0,)) for _ in range(5)),
+        GateEvent("h", (2,)),
+        *(GateEvent("t", (1,)) for _ in range(3)),
+        GateEvent("cx", (1, 2)),
+    ]
+    lowered = replace(seed.lowered, events=events, allocated_qubits=3)
+    state = SearchState(
+        label="schedule-witness",
+        lowered=lowered,
+        resources=estimate_resources(lowered),
+        verification=seed.verification,
+        objective_value=5,
+        source_seed="schedule-witness",
+        total_error=1e-4,
+        schedule=schedule_events(events),
+    )
+    action = next(
+        item
+        for item in default_actions(PyZXAdapter(seed=0))
+        if item.backend == "phase_ancilla"
+    )
+    critical = _adaptive_priority(
+        state, action, objective, SelectionLimits(ancilla=4), 1, (0, 5)
+    )
+    slack = _adaptive_priority(
+        state, action, objective, SelectionLimits(ancilla=4), 1, (6, 10)
+    )
+    assert critical[0] > slack[0]
+    assert "5 critical" in critical[1]
+    assert "0 critical" in slack[1]

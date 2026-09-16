@@ -9,6 +9,7 @@ import multiprocessing
 import numpy as np
 
 from ..lowering import GateEvent, LoweredCircuit, MacroEvent
+from ..lowering.primitives import exact_toffoli_gate_sequence
 from .core import verify_candidate
 
 
@@ -216,44 +217,23 @@ def _apply_cx(state: np.ndarray, control: int, target: int) -> None:
     state[right] = values
 
 
-TOFFOLI_DECOMPOSITION = (
-    GateEvent("h", (2,)),
-    GateEvent("cx", (1, 2)),
-    GateEvent("tdg", (2,)),
-    GateEvent("cx", (0, 2)),
-    GateEvent("t", (2,)),
-    GateEvent("cx", (1, 2)),
-    GateEvent("tdg", (2,)),
-    GateEvent("cx", (0, 2)),
-    GateEvent("t", (1,)),
-    GateEvent("t", (2,)),
-    GateEvent("h", (2,)),
-    GateEvent("cx", (0, 1)),
-    GateEvent("t", (0,)),
-    GateEvent("tdg", (1,)),
-    GateEvent("cx", (0, 1)),
-)
-
-
 @lru_cache(maxsize=1)
 def _toffoli_decomposition_error() -> float:
     actual = np.eye(8, dtype=np.complex128)
-    for event in TOFFOLI_DECOMPOSITION:
-        if event.kind == "cx":
-            _apply_cx(actual, event.qubits[0], event.qubits[1])
+    for kind, qubits in exact_toffoli_gate_sequence((0, 1, 2)):
+        if kind == "cx":
+            _apply_cx(actual, qubits[0], qubits[1])
         else:
-            _apply_one_qubit(actual, ONE_QUBIT_GATES[event.kind], event.qubits[0])
+            _apply_one_qubit(actual, ONE_QUBIT_GATES[kind], qubits[0])
     target = np.eye(8, dtype=np.complex128)
     target[[3, 7], :] = target[[7, 3], :]
     return float(np.linalg.norm(target - actual, ord=2))
 
 
 def _toffoli_events(qubits: tuple[int, ...]) -> list[GateEvent]:
-    first, second, target = qubits
-    mapping = {0: first, 1: second, 2: target}
     return [
-        GateEvent(event.kind, tuple(mapping[qubit] for qubit in event.qubits))
-        for event in TOFFOLI_DECOMPOSITION
+        GateEvent(kind, wires)
+        for kind, wires in exact_toffoli_gate_sequence(qubits)
     ]
 
 
@@ -624,18 +604,40 @@ def _verify_external_edge(
         )
     if result.optimization.get("backend") == "phase_ancilla":
         try:
-            from ..adapters.phase_ancilla import phase_signature
+            from ..adapters.phase_ancilla import (
+                certified_scratch_pool,
+                phase_signature,
+            )
 
             start, stop = result.optimization["region"]
             scratch = result.optimization["scratch"]
             live = source.allocated_qubits
             if live is None:
                 live = source.candidate.program.qubit_count + source.candidate.workspace_qubits
+            clean_pool = certified_scratch_pool(source)
+            primary_width = live - len(clean_pool)
+            allocated_scratch = tuple(
+                result.optimization.get("allocated_scratch_wire_ids", ())
+            )
+            reused_scratch = tuple(
+                result.optimization.get("reused_scratch_wire_ids", ())
+            )
+            scratch_wires = tuple(result.optimization.get("scratch_wire_ids", ()))
+            result_width = live + len(allocated_scratch)
             if (
                 not isinstance(start, int) or not isinstance(stop, int)
                 or not 0 <= start < stop <= len(source.events)
                 or not isinstance(scratch, int) or scratch <= 0
-                or result.allocated_qubits != live + scratch
+                or len(scratch_wires) != scratch
+                or reused_scratch != clean_pool[: len(reused_scratch)]
+                or scratch_wires != (*reused_scratch, *allocated_scratch)
+                or allocated_scratch
+                != tuple(range(live, result_width))
+                or tuple(result.optimization.get("released_scratch_wire_ids", ()))
+                != scratch_wires
+                or tuple(result.optimization.get("clean_scratch_pool", ()))
+                != (*clean_pool, *allocated_scratch)
+                or result.allocated_qubits != result_width
                 or result.events[:start] != source.events[:start]
             ):
                 raise ValueError("invalid phase-region boundary or allocation")
@@ -643,9 +645,16 @@ def _verify_external_edge(
             if suffix and result.events[-len(suffix):] != suffix:
                 raise ValueError("phase replacement changed gates outside its region")
             replacement = result.events[start:len(result.events) - len(suffix)] if suffix else result.events[start:]
-            expected_map, expected_phase = phase_signature(source.events[start:stop], live, live)
-            actual_map, actual_phase = phase_signature(replacement, live, live + scratch)
-            if actual_map != expected_map + (0,) * scratch or actual_phase != expected_phase:
+            expected_map, expected_phase = phase_signature(
+                source.events[start:stop], primary_width, live
+            )
+            actual_map, actual_phase = phase_signature(
+                replacement, primary_width, result_width
+            )
+            if (
+                actual_map != expected_map + (0,) * len(allocated_scratch)
+                or actual_phase != expected_phase
+            ):
                 raise ValueError("phase replacement changes live action or leaves scratch dirty")
             if abs(cmath.exp(1j * (result.lowering_global_phase - source.lowering_global_phase)) - 1) > 1e-9:
                 raise ValueError("phase replacement changes the global phase")

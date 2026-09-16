@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass
+from functools import cmp_to_key
 import json
 from pathlib import Path
 from typing import Any
+
+from .selection import (
+    FinalObjective,
+    compare_objective_outcomes,
+    compare_objective_values,
+    dominates_resources,
+)
 
 
 def _identity(row: dict[str, Any]) -> tuple[str, ...]:
@@ -64,10 +73,29 @@ def _backend_summary(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+@dataclass
+class _ComparisonCounts:
+    wins: int = 0
+    ties: int = 0
+    regressions: int = 0
+    denominator: int = 0
+    tie_break_wins: int = 0
+    tie_break_ties: int = 0
+    tie_break_regressions: int = 0
+    pareto_dominates: int = 0
+    pareto_equal: int = 0
+    pareto_dominated: int = 0
+    pareto_incomparable: int = 0
+
+
+def _resource_tuple(row: dict[str, Any]) -> tuple[int, int, int]:
+    return (int(row["t_count"]), int(row["t_depth"]), int(row["peak_workspace"]))
+
+
 def _comparison_counts(
     groups: dict[tuple, list[dict[str, Any]]], comparator_policies: set[str]
-) -> tuple[int, int, int, int]:
-    wins = ties = regressions = denominator = 0
+) -> _ComparisonCounts:
+    counts = _ComparisonCounts()
     for rows in groups.values():
         adaptive = next(
             (row for row in rows if row["policy"] == "adaptive" and row["status"] == "success"),
@@ -80,16 +108,70 @@ def _comparison_counts(
         ]
         if adaptive is None or not comparators:
             continue
-        denominator += 1
-        reference = min(float(row["objective_value"]) for row in comparators)
-        actual = float(adaptive["objective_value"])
-        if actual < reference - 1e-12:
-            wins += 1
-        elif actual > reference + 1e-12:
-            regressions += 1
+        objective = FinalObjective.from_value(adaptive["objective"])
+
+        def compare_rows(first: dict[str, Any], second: dict[str, Any]) -> int:
+            result = compare_objective_outcomes(
+                objective,
+                float(first["objective_value"]),
+                _resource_tuple(first),
+                float(second["objective_value"]),
+                _resource_tuple(second),
+            )
+            if result:
+                return result
+            return (first["policy"] > second["policy"]) - (
+                first["policy"] < second["policy"]
+            )
+
+        reference = min(comparators, key=cmp_to_key(compare_rows))
+        counts.denominator += 1
+        scalar = compare_objective_values(
+            float(adaptive["objective_value"]),
+            float(reference["objective_value"]),
+        )
+        if scalar < 0:
+            counts.wins += 1
+        elif scalar > 0:
+            counts.regressions += 1
         else:
-            ties += 1
-    return wins, ties, regressions, denominator
+            counts.ties += 1
+            physical = compare_objective_outcomes(
+                objective,
+                float(adaptive["objective_value"]),
+                _resource_tuple(adaptive),
+                float(reference["objective_value"]),
+                _resource_tuple(reference),
+            )
+            if physical < 0:
+                counts.tie_break_wins += 1
+            elif physical > 0:
+                counts.tie_break_regressions += 1
+            else:
+                counts.tie_break_ties += 1
+        adaptive_resources = _resource_tuple(adaptive)
+        reference_resources = _resource_tuple(reference)
+        if dominates_resources(adaptive_resources, reference_resources):
+            counts.pareto_dominates += 1
+        elif adaptive_resources == reference_resources:
+            counts.pareto_equal += 1
+        elif dominates_resources(reference_resources, adaptive_resources):
+            counts.pareto_dominated += 1
+        else:
+            counts.pareto_incomparable += 1
+    return counts
+
+
+def _comparison_text(label: str, counts: _ComparisonCounts) -> str:
+    return (
+        f"{label}: {counts.wins} wins, {counts.ties} ties, "
+        f"{counts.regressions} regressions on {counts.denominator} matched cases. "
+        f"Within scalar ties, physical tie-breaks are {counts.tie_break_wins} wins, "
+        f"{counts.tie_break_ties} ties, {counts.tie_break_regressions} regressions. "
+        f"Pareto relation is {counts.pareto_dominates} dominates, "
+        f"{counts.pareto_equal} equal, {counts.pareto_dominated} dominated, "
+        f"{counts.pareto_incomparable} incomparable."
+    )
 
 
 def _adaptive_comparison(groups: dict[tuple, list[dict[str, Any]]]) -> str:
@@ -97,12 +179,16 @@ def _adaptive_comparison(groups: dict[tuple, list[dict[str, Any]]]) -> str:
     fixed = _comparison_counts(groups, {"fixed_count_depth", "fixed_depth_count"})
     frozen = _comparison_counts(groups, {"frozen"})
     return (
-        f"Adaptive versus the combined static-preference portfolio: {static[0]} wins, "
-        f"{static[1]} ties, {static[2]} regressions on {static[3]} matched cases. "
-        f"Versus the fixed successive-sequence portfolio: {fixed[0]} wins, "
-        f"{fixed[1]} ties, {fixed[2]} regressions on {fixed[3]} cases. "
-        f"Versus frozen priorities: {frozen[0]} wins, {frozen[1]} ties, "
-        f"{frozen[2]} regressions on {frozen[3]} cases. Static and fixed "
+        _comparison_text(
+            "Adaptive versus the combined static-preference portfolio", static
+        )
+        + " "
+        + _comparison_text(
+            "Versus the fixed successive-sequence portfolio", fixed
+        )
+        + " "
+        + _comparison_text("Versus frozen priorities", frozen)
+        + " Static and fixed "
         "portfolios split the same total call budget; each policy sees the same roots and actions."
     )
 
@@ -126,11 +212,12 @@ def _mechanism_conclusion(
     return (
         f"Ancilla-for-depth action observed: {'yes' if ancilla_gain else 'no'}. "
         f"Verified successive transformations observed: {'yes' if chained else 'no'}. "
-        f"Adaptive beats the matched static portfolio in {static[0]}/{static[3]} "
-        f"and the matched fixed-sequence portfolio in {fixed[0]}/{fixed[3]} cases. "
-        f"Versus frozen priorities: {frozen[0]} wins, {frozen[1]} ties, "
-        f"{frozen[2]} regressions. "
-        "A workspace-release/reuse mechanism has not been established."
+        f"Adaptive beats the matched static portfolio in {static.wins}/{static.denominator} "
+        f"and the matched fixed-sequence portfolio in {fixed.wins}/{fixed.denominator} cases. "
+        f"Versus frozen priorities: {frozen.wins} wins, {frozen.ties} ties, "
+        f"{frozen.regressions} regressions. "
+        "Certified scratch reuse is implemented; an application-level benefit "
+        "has not been established."
     )
 
 
@@ -286,17 +373,23 @@ def render_comparison_report(rows: list[dict[str, Any]], results_path: Path) -> 
             "",
             trace_case,
             "",
-            "| Step | Parent | Region | Action | Scratch | P | Priority and reason | T | D | A | J | Seconds | Status |",
-            "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | ---: | --- |",
+            "| Step | Parent | Region | Action | Scratch | Scratch wires | P | Priority and reason | T | D | A | J | Seconds | Status |",
+            "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
         ]
     )
     if trace_row is None:
-        lines.append("| 0 | n/a | n/a | none | 0 | n/a | no adaptive attempt | n/a | n/a | n/a | n/a | 0 | none |")
+        lines.append("| 0 | n/a | n/a | none | 0 | n/a | n/a | no adaptive attempt | n/a | n/a | n/a | n/a | 0 | none |")
     else:
         for step in trace_row["trace"]:
+            scratch_wires = (
+                f"alloc={step.get('allocated_scratch_wire_ids', [])}, "
+                f"reuse={step.get('reused_scratch_wire_ids', [])}, "
+                f"release={step.get('released_scratch_wire_ids', [])}"
+            )
             lines.append(
                 f"| {step['step']} | {_cell(step.get('parent_id', ''))} | {_cell(step['region'])} | "
                 f"{_cell(step['action_backend'])} | {step.get('allowance', 0)} | "
+                f"{_cell(scratch_wires)} | "
                 f"{_cell(str(tuple(round(value, 3) for value in step.get('priority_vector', []))))} | "
                 f"{step['local_priority']:.4f}: {_cell(step['reason'].splitlines()[0])} | "
                 f"{step['t_before']} -> {step['t_after']} | "

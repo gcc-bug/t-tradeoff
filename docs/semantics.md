@@ -33,8 +33,11 @@ explicit compositional scope based on deterministic gate replay, validated
 primitive decompositions, exact transformation certificates, and summed local
 synthesis error.
 
-The primary `hwp_adder_unitary` construction emits staged compressor arithmetic
-on materialized parity wires, phases the surviving binary-weight wires, and
-reverses arithmetic and parity preparation. It must pass clean-workspace and
-lowered-circuit verification. Exact optimizer results are checked against this
-verified source circuit with explicit global-phase correction.
+The primary `hwp_adder_unitary` construction emits staged compressor arithmetic,
+phases the surviving binary-weight wires, and reverses the arithmetic. It may
+operate in place only on distinct positive unit singleton predicates; those
+data wires must be restored. General predicates are materialized on clean
+workspace and their parity preparation is also reversed. Both layouts must
+pass clean-workspace and lowered-circuit verification. Exact optimizer results
+are checked against this verified source circuit with explicit global-phase
+correction.

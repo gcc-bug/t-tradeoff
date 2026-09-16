@@ -22,11 +22,11 @@ facts without presenting those implementations as competitors.
 
 Ideal construction verification checks the phase on every basis state up to
 the declared limit and requires data and clean workspace restoration. Lowered
-verification independently checks rotation matrices, a hard-coded Toffoli
-decomposition matrix, deterministic event-to-operation binding, global phase,
-and the exact allocation of local errors into the circuit budget. If those
-obligations are absent, a memory cap produces an unsupported result rather than
-a successful compositional certificate.
+verification independently checks rotation matrices, the shared Toffoli
+template against the ideal matrix, deterministic event-to-operation binding,
+global phase, and the exact allocation of local errors into the circuit budget.
+If those obligations are absent, a memory cap produces an unsupported result
+rather than a successful compositional certificate.
 
 Resource accounting schedules dependencies in the actual emitted event stream,
 records critical T events and event slack, and derives peak workspace from
@@ -43,7 +43,9 @@ J = wT*T/Tref + wD*D/Dref + wA*A/Aref,
 ```
 
 with nonnegative weights and fixed positive references. Hard limits and
-tie-breaks remain unchanged throughout a run. Ancilla-first requires explicit
+tie-breaks remain unchanged throughout a run. Selection and reporting share
+one numeric scalar-tie rule, while the report classifies physical tie-breaks
+and Pareto relations separately. Ancilla-first requires explicit
 T-count and T-depth limits.
 
 Static priorities, a fixed pass order, adaptive priorities without lookahead,

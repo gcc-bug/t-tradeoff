@@ -6,6 +6,7 @@ from typing import Any
 
 from ..circuit import Candidate, Operation
 from ..ir import ScaledAngle
+from .primitives import exact_toffoli_gate_sequence
 from .synthesis import RotationSynthesis, RotationSynthesizer
 
 
@@ -140,26 +141,10 @@ class LoweredCircuit:
 
 
 def _toffoli_events(qubits: tuple[int, ...]) -> list[GateEvent]:
-    first, second, target = qubits
-    # Standard exact 7-T, ancilla-free Toffoli decomposition.
-    sequence = [
-        ("h", (target,)),
-        ("cx", (second, target)),
-        ("tdg", (target,)),
-        ("cx", (first, target)),
-        ("t", (target,)),
-        ("cx", (second, target)),
-        ("tdg", (target,)),
-        ("cx", (first, target)),
-        ("t", (second,)),
-        ("t", (target,)),
-        ("h", (target,)),
-        ("cx", (first, second)),
-        ("t", (first,)),
-        ("tdg", (second,)),
-        ("cx", (first, second)),
+    return [
+        GateEvent(kind, wires)
+        for kind, wires in exact_toffoli_gate_sequence(qubits)
     ]
-    return [GateEvent(kind, wires) for kind, wires in sequence]
 
 
 def _emit_rotation(

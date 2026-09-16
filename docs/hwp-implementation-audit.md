@@ -1,6 +1,7 @@
 # HWP Implementation Audit
 
-Audit date: 2026-09-09.
+Audit date: 2026-09-15 (in-place layout and Toffoli lowering update); original
+construction audit 2026-09-09.
 
 ## Sources
 
@@ -10,6 +11,13 @@ arXiv:1902.10673v4 (the CC BY 4.0 revision), Appendix A.1, "Combining
 arbitrary parallelizable rotations by Hamming weight phasing." The relevant
 passages define weight-bit phasing, the staged three-input and two-input
 adders, the `n - 1` worst-case bound, and measurement-assisted uncomputation.
+
+The exact unitary Toffoli lowering follows the seven-term CCZ phase polynomial
+shown as the T-depth-three Toffoli in Amy, Maslov, Mosca, and Roetteler,
+arXiv:1206.0758v4, Figure 13. Conjugating CCZ by Hadamards on the target gives
+CCX with seven T/T-dagger gates in three layers under the local dependency
+scheduler. The shared emitted template is independently checked against the
+dense eight-dimensional CCX matrix, including global phase.
 
 The primitive cleanup assumptions were cross-checked against Gidney, *Halving
 the cost of quantum addition*, arXiv:1709.06648v3, Figures 2 and 3 and the
@@ -30,13 +38,24 @@ the local gate ordering and exact count.
 | Three equal-weight inputs plus clean carry | `append_three_to_two_compressor` | five CNOTs and one Toffoli; two inputs retained as garbage, third becomes sum, carry becomes next weight |
 | Even final pair plus clean carry | `append_two_to_two_adder` | one Toffoli and one CNOT; second input becomes sum |
 | Repeated weight stages | `hamming_weight_compute` | triples are reduced at each weight, an odd survivor becomes the output bit, and carries feed the next stage |
+| Applicable input layout | `_emit_adder_batch` | distinct positive unit singleton predicates use their data wires directly; arithmetic is reversed after phasing |
+| General parity layout | `_emit_adder_batch` | other supported groups materialize each parity on a clean workspace wire |
 | Weight-bit rotations | `_emit_adder_batch` | `P(2^j theta)` on each surviving weight-`2^j` bit |
-| Cleanup | `_emit_adder_batch` | reverse every arithmetic operation, then reverse parity preparation |
+| Cleanup | `_emit_adder_batch` | reverse every arithmetic operation; the copied layout also reverses parity preparation |
 
-The local construction materializes every parity predicate first because this
-repository starts from parity functions, while the paper starts from qubits on
-which equal rotations are already available. For a batch of size `n > 1`, the
-local peak workspace is therefore
+For distinct positive singleton predicates with unit coefficient and no
+duplicate provenance, the local construction now uses the corresponding input
+wires as the HWP input register and restores them by reversing the arithmetic.
+For a batch of size `n > 1`, this layout uses
+
+```text
+n - popcount(n) clean carry qubits.
+```
+
+Repeated, complemented, weighted, or dependent predicates do not enter this
+special case. The general construction still materializes every parity first
+because this repository starts from parity functions, while the paper starts
+from qubits on which equal rotations are already available. Its workspace is
 
 ```text
 n parity qubits + (n - popcount(n)) clean carry qubits.
@@ -49,9 +68,17 @@ This is not the measured construction's T count. The paper and Qualtran can
 use temporary-AND measurement cleanup; the default unitary profile cannot.
 
 Every batch trace records parity wires, surviving output-weight wires, retained
-garbage, carry wires, stage widths, forward and cleanup Toffolis, rotations,
-and the source. Tests exhaust primitive truth tables and full population-count
-computation/inversion for sizes 1-8, including non-powers of two.
+garbage, carry wires, stage widths, selected layout, forward and cleanup
+Toffolis, rotations, and the source. Tests exhaust primitive truth tables and
+full population-count computation/inversion for sizes 1-8, including
+non-powers of two, and reject the in-place special case for dependent inputs.
+
+For four independent predicates at angle `0.173` and total error `1e-4`, the
+pinned pre-repair direct and copied-HWP measurements were `(200,50,0)` and
+`(190,73,7)`. With the three-layer Toffoli, copied HWP is `(190,68,7)` and the
+in-place layout is `(190,68,3)`. Applying the same PyZX `zx_extract` pass gives
+`(176,161,7)` and `(176,67,3)` respectively on this environment. These are
+construction and primitive-lowering repairs, not an adaptive-search result.
 
 ## Historical ANF Reference
 

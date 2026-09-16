@@ -8,7 +8,8 @@ from collective_phase.baselines import compile_hwp_adder_unitary, compile_indepe
 from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer, lower_candidate
-from collective_phase.resources import estimate_resources
+from collective_phase.lowering.primitives import exact_toffoli_gate_sequence
+from collective_phase.resources import estimate_resources, schedule_events
 
 
 def _apply_gate(state, event, total_qubits):
@@ -38,6 +39,24 @@ def _apply_gate(state, event, total_qubits):
             output[destination] += value
         return output
     raise AssertionError(event.kind)
+
+
+def test_exact_toffoli_template_is_independently_checked_and_three_layers():
+    events = [
+        GateEvent(kind, qubits)
+        for kind, qubits in exact_toffoli_gate_sequence((0, 1, 2))
+    ]
+    assert sum(event.kind in {"t", "tdg"} for event in events) == 7
+    assert schedule_events(events).t_depth == 3
+    for basis in range(8):
+        state = np.zeros(8, complex)
+        state[basis] = 1
+        for event in events:
+            state = _apply_gate(state, event, 3)
+        expected = basis ^ (4 if basis & 3 == 3 else 0)
+        target = np.zeros(8, complex)
+        target[expected] = 1
+        assert np.linalg.norm(state - target) < 1e-10
 
 
 def test_unitary_hwp_is_fully_emitted_and_matches_dense_target():

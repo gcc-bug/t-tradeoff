@@ -16,6 +16,23 @@ PHASE_GATES = {"t": 1, "tdg": -1, "s": 2, "sdg": -2, "z": 4}
 REGION_GATES = frozenset(PHASE_GATES) | {"cx"}
 
 
+def certified_scratch_pool(lowered: LoweredCircuit) -> tuple[int, ...]:
+    """Return the trailing scratch pool certified clean by the last local action."""
+    metadata = lowered.optimization or {}
+    if (
+        metadata.get("backend") != "phase_ancilla"
+        or metadata.get("contract") != "clean_phase_polynomial"
+    ):
+        return ()
+    pool = tuple(int(wire) for wire in metadata.get("clean_scratch_pool", ()))
+    width = lowered.allocated_qubits
+    if width is None:
+        width = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
+    if pool and pool != tuple(range(width - len(pool), width)):
+        raise ValueError("certified scratch pool must be a trailing allocation")
+    return pool
+
+
 def phase_signature(events: list, live: int, width: int) -> tuple[tuple[int, ...], tuple[tuple[int, int], ...]]:
     """Linear output masks and phase polynomial mod 8 on clean extra wires."""
     if width < live:
@@ -76,37 +93,59 @@ class PhaseAncillaAdapter:
             live = lowered.allocated_qubits
             if live is None:
                 live = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
+            clean_pool = certified_scratch_pool(lowered)
+            primary_width = live - len(clean_pool)
             original = lowered.events[region[0]:region[1]]
-            _, phases = phase_signature(original, live, live)
+            expected_map, phases = phase_signature(original, primary_width, live)
             direct = [(mask, power) for mask, power in phases if mask.bit_count() == 1]
             indirect = [(mask, power) for mask, power in phases if mask.bit_count() > 1]
             if len(indirect) < 2:
                 raise ValueError("region has fewer than two nontrivial phase parities")
             scratch = min(allowance, len(indirect))
+            reused = clean_pool[:scratch]
+            allocated = tuple(range(live, live + scratch - len(reused)))
+            scratch_wires = (*reused, *allocated)
             rewritten: list[GateEvent] = []
             for offset in range(0, len(indirect), scratch):
                 group = indirect[offset:offset + scratch]
                 for index, (mask, _) in enumerate(group):
-                    rewritten.extend(GateEvent("cx", (wire, live + index)) for wire in range(live) if mask & (1 << wire))
+                    rewritten.extend(
+                        GateEvent("cx", (wire, scratch_wires[index]))
+                        for wire in range(primary_width)
+                        if mask & (1 << wire)
+                    )
                 if offset == 0:
                     for mask, power in direct:
                         rewritten.extend(_phase_gates(power, mask.bit_length() - 1))
                 for index, (mask, power) in enumerate(group):
-                    rewritten.extend(_phase_gates(power, live + index))
+                    rewritten.extend(_phase_gates(power, scratch_wires[index]))
                 for index, (mask, _) in reversed(list(enumerate(group))):
-                    rewritten.extend(GateEvent("cx", (wire, live + index)) for wire in reversed(range(live)) if mask & (1 << wire))
+                    rewritten.extend(
+                        GateEvent("cx", (wire, scratch_wires[index]))
+                        for wire in reversed(range(primary_width))
+                        if mask & (1 << wire)
+                    )
             rewritten.extend(event for event in original if event.kind == "cx")
-            if phase_signature(rewritten, live, live + scratch) != (
-                phase_signature(original, live, live)[0] + (0,) * scratch,
+            result_width = live + len(allocated)
+            if phase_signature(rewritten, primary_width, result_width) != (
+                expected_map + (0,) * len(allocated),
                 phases,
             ):
                 raise ValueError("phase replacement failed its clean-scratch contract")
             events = [*lowered.events[:region[0]], *rewritten, *lowered.events[region[1]:]]
+            resulting_pool = (*clean_pool, *allocated)
             optimized = replace(
-                lowered, events=events, allocated_qubits=live + scratch,
+                lowered, events=events, allocated_qubits=result_width,
                 optimization={"backend": "phase_ancilla", "revision": self.revision,
                               "action": "parallel_phase", "region": list(region),
-                              "scratch": scratch, "contract": "clean_phase_polynomial"},
+                              "scope": "event_region",
+                              "scratch": scratch,
+                              "scratch_wire_ids": list(scratch_wires),
+                              "allocated_scratch_wire_ids": list(allocated),
+                              "reused_scratch_wire_ids": list(reused),
+                              "released_scratch_wire_ids": list(scratch_wires),
+                              "clean_scratch_pool": list(resulting_pool),
+                              "contract": "clean_phase_polynomial"},
             )
             return AdapterResult("phase_ancilla", self.revision, "parallel_phase", "verified", time.perf_counter() - started, optimized)
         except (ValueError, TypeError) as exc:

@@ -30,9 +30,12 @@ an emitted circuit and replayable proof chain in the policy's circuit artifact.
 
 The default comparison contains `independent`, `shared_parity`, and
 `hwp_adder_unitary`. The HWP construction emits the staged adder/compressor
-network described by Kivlichan et al. and reverses it for unitary cleanup. This
-adaptation is more expensive than the paper's measurement-assisted cleanup and
-is labeled accordingly.
+network described by Kivlichan et al. and reverses it for unitary cleanup.
+Distinct positive singleton predicates use an audited in-place input layout;
+general predicates keep the copied-parity layout. Toffolis use the exact
+seven-T, three-T-layer Amy-Maslov-Mosca decomposition. This adaptation remains
+more expensive than the HWP paper's measurement-assisted cleanup and is
+labeled accordingly.
 
 The former ANF popcount, dependent-triple wrapper, legacy macro, and catalytic
 estimate are retained only in Git history and historical reports. They are not
