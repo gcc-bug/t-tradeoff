@@ -11,8 +11,8 @@ from typing import Protocol
 from .adapters import AdapterResult, PyZXAdapter
 from .adapters.phase_ancilla import (
     PhaseAncillaAdapter,
-    certified_scratch_pool,
     phase_regions,
+    validated_scratch_pool,
 )
 from .baselines import (
     compile_hwp_adder_unitary_alternatives,
@@ -238,6 +238,19 @@ def _constraint_pressure(
     )
 
 
+def _preference_vector(
+    state: SearchState,
+    objective: FinalObjective,
+    limits: SelectionLimits,
+) -> tuple[float, float, float]:
+    weights = _objective_weights(objective)
+    pressure = _constraint_pressure(state.resources, limits)
+    return tuple(
+        weight + constraint
+        for weight, constraint in zip(weights, pressure, strict=True)
+    )
+
+
 def _adaptive_priority(
     state: SearchState,
     action: ActionSpec,
@@ -245,6 +258,8 @@ def _adaptive_priority(
     limits: SelectionLimits,
     allowance: int,
     region: tuple[int, int] | None,
+    *,
+    preference_vector: tuple[float, float, float] | None = None,
 ) -> tuple[float, str, tuple[float, float, float]]:
     schedule = state.schedule
     if schedule is None:
@@ -271,13 +286,12 @@ def _adaptive_priority(
         else 0.0
     )
     additional_scratch = max(
-        0, allowance - len(certified_scratch_pool(state.lowered))
+        0, allowance - len(validated_scratch_pool(state.lowered))
     )
-    weights = _objective_weights(objective)
-    pressure = _constraint_pressure(state.resources, limits)
-    demand = tuple(
-        weight + constraint
-        for weight, constraint in zip(weights, pressure, strict=True)
+    demand = (
+        _preference_vector(state, objective, limits)
+        if preference_vector is None
+        else preference_vector
     )
     evidence = (
         action.orientation[0] * (0.5 + demand_fraction),
@@ -322,7 +336,7 @@ def _static_priority(
         "static_balanced": (1 / 3, 1 / 3, 1 / 3),
     }.get(policy, (1.0, 0.0, 0.0))
     additional_scratch = max(
-        0, allowance - len(certified_scratch_pool(state.lowered))
+        0, allowance - len(validated_scratch_pool(state.lowered))
     )
     return (
         sum(
@@ -370,7 +384,7 @@ def _proposal_order(
                     additional_scratch = max(
                         0,
                         allowance
-                        - len(certified_scratch_pool(source.lowered)),
+                        - len(validated_scratch_pool(source.lowered)),
                     )
                     if (
                         limits.ancilla is not None
@@ -383,15 +397,19 @@ def _proposal_order(
                             source, action, objective, limits, allowance, region
                         )
                     elif policy == "frozen":
+                        initial_preference = _preference_vector(
+                            roots[source.source_seed], objective, limits
+                        )
                         priority, reason, vector = _adaptive_priority(
-                            roots[source.source_seed],
+                            source,
                             action,
                             objective,
                             limits,
                             allowance,
-                            None,
+                            region,
+                            preference_vector=initial_preference,
                         )
-                        reason = "frozen seed priority; " + reason
+                        reason = "frozen initial preference vector; " + reason
                     elif policy.startswith("fixed_"):
                         priority, reason, vector = float(max_depth - source.depth), "predeclared successive pass sequence", (0.0, 0.0, 0.0)
                     else:
@@ -465,10 +483,15 @@ def default_actions(pyzx: Optimizer, feynman: Optimizer | None = None) -> list[A
 
 def _state_key(state: SearchState) -> str:
     lowered = state.lowered
+    try:
+        clean_pool = validated_scratch_pool(lowered)
+    except (ValueError, TypeError, KeyError, IndexError):
+        clean_pool = ()
     encoded = json.dumps(
         (lowered.candidate.program.id, lowered.candidate.global_phase,
          lowered.lowering_global_phase, lowered.error_bound,
-         lowered.allocated_qubits, [event.to_dict() for event in lowered.events]),
+         lowered.allocated_qubits, [event.to_dict() for event in lowered.events],
+         {"validated_clean_scratch_pool": clean_pool}),
         sort_keys=True, separators=(",", ":"),
     ).encode()
     return hashlib.sha256(encoded).hexdigest()

@@ -33,6 +33,39 @@ def certified_scratch_pool(lowered: LoweredCircuit) -> tuple[int, ...]:
     return pool
 
 
+def validated_scratch_pool(lowered: LoweredCircuit) -> tuple[int, ...]:
+    """Return a pool only when the emitted stream proves its clean contract."""
+    pool = certified_scratch_pool(lowered)
+    if not pool:
+        return ()
+    width = lowered.allocated_qubits
+    if width is None:
+        width = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
+    primary_width = width - len(pool)
+    regions = phase_regions(lowered.events)
+    region_for_event = {
+        index: region
+        for region in regions
+        for index in range(region[0], region[1])
+    }
+    touched_regions: set[tuple[int, int]] = set()
+    pool_set = set(pool)
+    for index, event in enumerate(lowered.events):
+        if any(wire in pool_set for wire in event.qubits):
+            if index not in region_for_event:
+                raise ValueError(
+                    "clean scratch is touched outside a supported maximal phase region"
+                )
+            touched_regions.add(region_for_event[index])
+    for start, stop in touched_regions:
+        output_masks, _ = phase_signature(
+            lowered.events[start:stop], primary_width, width
+        )
+        if output_masks[primary_width:] != (0,) * len(pool):
+            raise ValueError("supported phase region does not restore clean scratch")
+    return pool
+
+
 def phase_signature(events: list, live: int, width: int) -> tuple[tuple[int, ...], tuple[tuple[int, int], ...]]:
     """Linear output masks and phase polynomial mod 8 on clean extra wires."""
     if width < live:
@@ -93,7 +126,7 @@ class PhaseAncillaAdapter:
             live = lowered.allocated_qubits
             if live is None:
                 live = lowered.candidate.program.qubit_count + lowered.candidate.workspace_qubits
-            clean_pool = certified_scratch_pool(lowered)
+            clean_pool = validated_scratch_pool(lowered)
             primary_width = live - len(clean_pool)
             original = lowered.events[region[0]:region[1]]
             expected_map, phases = phase_signature(original, primary_width, live)
@@ -147,6 +180,7 @@ class PhaseAncillaAdapter:
                               "clean_scratch_pool": list(resulting_pool),
                               "contract": "clean_phase_polynomial"},
             )
+            validated_scratch_pool(optimized)
             return AdapterResult("phase_ancilla", self.revision, "parallel_phase", "verified", time.perf_counter() - started, optimized)
         except (ValueError, TypeError) as exc:
             return AdapterResult("phase_ancilla", self.revision, "parallel_phase", "failed", time.perf_counter() - started, reason=str(exc))

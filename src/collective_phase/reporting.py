@@ -187,7 +187,7 @@ def _adaptive_comparison(groups: dict[tuple, list[dict[str, Any]]]) -> str:
             "Versus the fixed successive-sequence portfolio", fixed
         )
         + " "
-        + _comparison_text("Versus frozen priorities", frozen)
+        + _comparison_text("Versus the frozen initial preference vector", frozen)
         + " Static and fixed "
         "portfolios split the same total call budget; each policy sees the same roots and actions."
     )
@@ -214,7 +214,7 @@ def _mechanism_conclusion(
         f"Verified successive transformations observed: {'yes' if chained else 'no'}. "
         f"Adaptive beats the matched static portfolio in {static.wins}/{static.denominator} "
         f"and the matched fixed-sequence portfolio in {fixed.wins}/{fixed.denominator} cases. "
-        f"Versus frozen priorities: {frozen.wins} wins, {frozen.ties} ties, "
+        f"Versus the frozen initial preference vector: {frozen.wins} wins, {frozen.ties} ties, "
         f"{frozen.regressions} regressions. "
         "Certified scratch reuse is implemented; an application-level benefit "
         "has not been established."

@@ -1,6 +1,7 @@
 from dataclasses import replace
 
-from collective_phase.adapters import AdapterResult, PyZXAdapter
+from collective_phase.adapters import AdapterResult, PhaseAncillaAdapter, PyZXAdapter
+from collective_phase.adapters.phase_ancilla import phase_regions
 from collective_phase.baselines.common import CompilationConstraints
 from collective_phase.ir import AngleBinding, make_program
 from collective_phase.lowering import GateEvent, RotationSynthesizer
@@ -8,6 +9,9 @@ from collective_phase.search import (
     ActionSpec,
     SearchState,
     _adaptive_priority,
+    _preference_vector,
+    _proposal_order,
+    _state_key,
     construction_seeds,
     default_actions,
     run_policy,
@@ -230,6 +234,111 @@ def test_adaptive_priority_recounts_a_real_transformed_parent(tmp_path):
     assert continuation.parent_id == first.output_id
     assert continuation.priority_vector[1] < first.priority_vector[1]
     assert continuation.d_before == first.d_after
+
+
+def test_frozen_preference_matches_initial_regional_scores(tmp_path):
+    program = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7], AngleBinding("theta", "pi/4"),
+        coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    objective = FinalObjective(metric="t_depth")
+    limits = SelectionLimits(t_depth=5, ancilla=4)
+    seed = next(
+        state
+        for state in construction_seeds(
+            program, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+            RotationSynthesizer(tmp_path / "frozen.json"), objective,
+        )
+        if state.lowered.candidate.method == "independent"
+    )
+    actions = default_actions(PyZXAdapter(seed=0))
+    roots = {seed.label: seed}
+    adaptive = _proposal_order(
+        "adaptive", [seed], actions, objective, limits, set(), roots, 3
+    )
+    frozen = _proposal_order(
+        "frozen", [seed], actions, objective, limits, set(), roots, 3
+    )
+    adaptive_scores = {
+        (item.action.name, item.region, item.allowance):
+        (item.priority, item.priority_vector)
+        for item in adaptive
+    }
+    frozen_scores = {
+        (item.action.name, item.region, item.allowance):
+        (item.priority, item.priority_vector)
+        for item in frozen
+    }
+    assert frozen_scores == adaptive_scores
+
+
+def test_frozen_preference_uses_current_region_with_initial_vector(tmp_path):
+    program = make_program("one", 1, [1], AngleBinding("theta", "pi/4"))
+    objective = FinalObjective(metric="t_depth")
+    limits = SelectionLimits(t_depth=4, ancilla=4)
+    seed = construction_seeds(
+        program, CompilationConstraints(0, "unitary_clifford_t"), 1e-4,
+        RotationSynthesizer(tmp_path / "frozen-current.json"), objective,
+    )[0]
+    events = [
+        GateEvent("h", (0,)),
+        *(GateEvent("t", (0,)) for _ in range(4)),
+    ]
+    lowered = replace(seed.lowered, events=events)
+    transformed = replace(
+        seed,
+        label="transformed",
+        lowered=lowered,
+        resources=estimate_resources(lowered),
+        schedule=schedule_events(events),
+        depth=1,
+    )
+    action = next(
+        item for item in default_actions(PyZXAdapter(seed=0))
+        if item.backend == "phase_ancilla"
+    )
+    frozen_vector = _preference_vector(seed, objective, limits)
+    adaptive = _adaptive_priority(
+        transformed, action, objective, limits, 1, (1, 5)
+    )
+    frozen = _adaptive_priority(
+        transformed, action, objective, limits, 1, (1, 5),
+        preference_vector=frozen_vector,
+    )
+    assert adaptive[1] == frozen[1]
+    assert adaptive[2] != frozen[2]
+    assert frozen[2] == frozen_vector
+
+
+def test_state_identity_includes_validated_clean_pool_capability(tmp_path):
+    program = make_program(
+        "exact-phase", 3, [1, 2, 4, 3, 5, 6, 7], AngleBinding("theta", "pi/4"),
+        coefficients=[1, 1, 1, -1, -1, -1, 1],
+    )
+    objective = FinalObjective(metric="t_depth")
+    source = next(
+        state
+        for state in construction_seeds(
+            program, CompilationConstraints(4, "unitary_clifford_t"), 1e-4,
+            RotationSynthesizer(tmp_path / "state-key.json"), objective,
+        )
+        if state.lowered.candidate.method == "independent"
+    )
+    optimized = PhaseAncillaAdapter().optimize_region(
+        source.lowered, phase_regions(source.lowered.events)[0], 1
+    ).lowered
+    assert optimized is not None
+    with_pool = replace(
+        source,
+        lowered=optimized,
+        resources=estimate_resources(optimized),
+    )
+    without_pool_lowered = replace(
+        optimized,
+        optimization={**optimized.optimization, "clean_scratch_pool": []},
+    )
+    without_pool = replace(with_pool, lowered=without_pool_lowered)
+    assert _state_key(with_pool) != _state_key(without_pool)
 
 
 def test_region_priority_distinguishes_critical_path_from_slack(tmp_path):

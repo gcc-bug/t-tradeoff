@@ -1,0 +1,66 @@
+schema_version: 3
+run_id: single-demonstration
+manifest: data/manifests/refocus-study.yaml
+analysis_focus: bounded_single_sequence_demonstration
+angles:
+  - {id: theta_0173, value: "0.173"}
+total_error_budgets: [1.0e-4]
+workspace_budgets: [8]
+model_profiles: [unitary_clifford_t]
+policies: [construction_only]
+required_policies: [construction_only]
+objective: t_count
+limits: {ancilla: 8, t_depth: null, t_count: null}
+hwp_search_cap: 8
+seed: 0
+backends:
+  feynman:
+    executable: feynopt
+    revision: v0.1.0@2b52a0a78c10999cfc4c1d9c76c994c471cf2350
+    timeout_seconds: 30
+search:
+  backend_call_budget: 120
+  backend_seconds_budget: 1800
+  max_depth: 3
+  max_regions_per_state: 2
+  phase_allowances: [1, 2, 4]
+  actions:
+    - pyzx:zx_extract
+    - pyzx:full_optimize
+    - phase_ancilla:parallel_phase
+demonstration:
+  case_id: qedc_mc_006_003_000
+  depth_reference_factor: 1.10
+  zero_ancilla_reference_order: [t_depth, t_count, ancilla]
+  references:
+    raw_seed: []
+    repeated_pyzx:
+      - pyzx:zx_extract
+      - pyzx:zx_extract
+      - pyzx:zx_extract
+    feynman_fixed_order:
+      - feynman:phasefold
+      - feynman:tpar
+    count_then_depth:
+      - pyzx:zx_extract
+      - phase_ancilla:parallel_phase@4
+    depth_then_count:
+      - phase_ancilla:parallel_phase@4
+      - pyzx:zx_extract
+  counterfactuals:
+    workspace_direct:
+      - phase_ancilla:parallel_phase@2
+    reverse_depth_then_count:
+      - phase_ancilla:parallel_phase@4
+      - pyzx:zx_extract
+    repeat_count_backend:
+      - pyzx:zx_extract
+      - pyzx:zx_extract
+      - pyzx:zx_extract
+    alternate_count_then_cleanup:
+      - pyzx:full_optimize
+      - pyzx:zx_extract
+      - pyzx:zx_extract
+  counterfactual_call_budget: 12
+results_dir: results/single-demonstration
+report_path: reports/single-demonstration.md

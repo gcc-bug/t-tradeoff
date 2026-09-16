@@ -21,8 +21,8 @@ phase-polynomial action. Every accepted circuit is checked against its verified
 parent chain, scheduled, and counted as `(T, T_depth, allocated ancillas)`
 before one immutable final objective and hard limits choose the endpoint.
 
-The bounded controller supports adaptive or frozen priorities, fixed static
-preferences, and two successive fixed pass orders, all using the same seeds
+The bounded controller supports adaptive or frozen initial preference vectors,
+fixed static preferences, and two successive fixed pass orders, all using the same seeds
 and action library. Its attempt trace records intermediate resource changes,
 including rejected rewrites. `--force` rebuilds only JSON checkpoints below
 the configured `results/` subdirectory. Each reported Pareto alternative has
@@ -108,7 +108,7 @@ and [docs/prior-work-matrix.md](docs/prior-work-matrix.md).
 
 The current evidence shows an enabling construction/backend sequence, but a
 fixed pass order reaches the same development endpoint. The balanced study
-ties frozen priorities on all five cases, so it does not establish that
+ties the frozen initial preference vector on all five cases, so it does not establish that
 recomputation improves search. The exact depth diagnostic uses extra clean
 ancillas to reduce T-depth, but the count diagnostic finds no T-count decrease.
 The study is unitary-only;

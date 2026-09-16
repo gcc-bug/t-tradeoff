@@ -92,6 +92,48 @@ def test_distinct_phase_regions_reuse_certified_clean_scratch():
     ).status.startswith("verified_lowered_")
 
 
+def test_phase_rewrite_rejects_interior_boundary_with_dense_check_skipped():
+    root = _ccz_phase_lowered()
+    parent = PhaseAncillaAdapter().optimize_region(
+        root, phase_regions(root.events)[0], 1
+    ).lowered
+    assert parent is not None
+    scratch = parent.optimization["clean_scratch_pool"][0]
+    index = next(
+        index
+        for index, event in enumerate(parent.events)
+        if event.kind == "cx" and event.qubits[1] == scratch
+    ) + 1
+    metadata = dict(
+        parent.optimization,
+        region=[index, index + 1],
+        scratch=1,
+        scratch_wire_ids=[scratch],
+        allocated_scratch_wire_ids=[],
+        reused_scratch_wire_ids=[scratch],
+        released_scratch_wire_ids=[scratch],
+    )
+    mutated = replace(
+        parent,
+        events=[
+            *parent.events[:index],
+            GateEvent("cx", (scratch, 2)),
+            *parent.events[index:],
+        ],
+        optimization=metadata,
+    )
+
+    skipped = verify_optimized_lowered_circuit(
+        parent, mutated, 1e-4, ancestry=(root,), memory_cap_bytes=1
+    )
+    dense = verify_optimized_lowered_circuit(
+        parent, mutated, 1e-4, ancestry=(root,)
+    )
+    assert skipped.status == "verification_failure"
+    assert dense.status == "verification_failure"
+    assert "boundary" in skipped.message
+
+
 def test_optimized_parent_requires_valid_full_chain():
     source = _ccz_phase_lowered()
     parent = PhaseAncillaAdapter().optimize_region(source, phase_regions(source.events)[0], 1).lowered

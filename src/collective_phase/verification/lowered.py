@@ -605,8 +605,9 @@ def _verify_external_edge(
     if result.optimization.get("backend") == "phase_ancilla":
         try:
             from ..adapters.phase_ancilla import (
-                certified_scratch_pool,
+                phase_regions,
                 phase_signature,
+                validated_scratch_pool,
             )
 
             start, stop = result.optimization["region"]
@@ -614,7 +615,7 @@ def _verify_external_edge(
             live = source.allocated_qubits
             if live is None:
                 live = source.candidate.program.qubit_count + source.candidate.workspace_qubits
-            clean_pool = certified_scratch_pool(source)
+            clean_pool = validated_scratch_pool(source)
             primary_width = live - len(clean_pool)
             allocated_scratch = tuple(
                 result.optimization.get("allocated_scratch_wire_ids", ())
@@ -627,7 +628,9 @@ def _verify_external_edge(
             if (
                 not isinstance(start, int) or not isinstance(stop, int)
                 or not 0 <= start < stop <= len(source.events)
+                or (start, stop) not in phase_regions(source.events)
                 or not isinstance(scratch, int) or scratch <= 0
+                or result.optimization.get("contract") != "clean_phase_polynomial"
                 or len(scratch_wires) != scratch
                 or reused_scratch != clean_pool[: len(reused_scratch)]
                 or scratch_wires != (*reused_scratch, *allocated_scratch)
@@ -648,6 +651,8 @@ def _verify_external_edge(
             expected_map, expected_phase = phase_signature(
                 source.events[start:stop], primary_width, live
             )
+            if expected_map[primary_width:] != (0,) * len(clean_pool):
+                raise ValueError("source phase region does not restore clean scratch")
             actual_map, actual_phase = phase_signature(
                 replacement, primary_width, result_width
             )
@@ -658,6 +663,7 @@ def _verify_external_edge(
                 raise ValueError("phase replacement changes live action or leaves scratch dirty")
             if abs(cmath.exp(1j * (result.lowering_global_phase - source.lowering_global_phase)) - 1) > 1e-9:
                 raise ValueError("phase replacement changes the global phase")
+            validated_scratch_pool(result)
         except (ValueError, TypeError, KeyError, IndexError) as exc:
             return LoweredVerificationResult(
                 "verification_failure", "clean_phase_polynomial", None,

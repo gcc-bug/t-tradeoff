@@ -1,5 +1,11 @@
 # Report Status
 
+`single-demonstration.md` is the current-revision, checksum-pinned six-vertex
+QED-C development demonstration. It freezes a zero-ancilla depth reference,
+emits and replays the winning circuit, and compares its sequence with fixed
+references and counterfactuals. It is development evidence, not a held-out
+evaluation.
+
 `adaptive-comparison.md` is the current schema-v3 development diagnosis.
 `default-study.md` is the preceding construction-centered study. Reports dated
 before 2026-09-09 are historical records whose numbers and claims are preserved
