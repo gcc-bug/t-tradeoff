@@ -116,3 +116,9 @@ measurement-assisted and catalytic performance comparisons remain unsupported.
 
 Historical reports are indexed in [reports/README.md](reports/README.md); their
 recorded numbers are preserved rather than retroactively revised.
+
+## Private Research Record
+
+Project-local ARA records claims, evidence, and research milestones in the
+ignored `ara/` directory. See [docs/ara.md](docs/ara.md) for the pinned setup,
+scope, and private publication policy.
