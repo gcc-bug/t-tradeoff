@@ -1,5 +1,11 @@
 # Report Status
 
+`hwp-pareto-study.md` records the finite-library unitary HWP Pareto experiment,
+including the strengthened remainder baseline, exact model frontiers, emitted
+circuits, and common downstream optimization. Its evidence is development-only
+and its exactness is restricted to the declared library and wave model.
+See [the validation record](hwp-pareto-validation.md) for tests and saved-circuit replay.
+
 `single-demonstration.md` is the current-revision, checksum-pinned six-vertex
 QED-C development demonstration. It freezes a zero-ancilla depth reference,
 emits and replays the winning circuit, and compares its sequence with fixed
