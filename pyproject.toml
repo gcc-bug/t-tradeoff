@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
+study = ["matplotlib>=3.8,<4"]
 
 [project.scripts]
 collective-phase = "collective_phase.cli:main"

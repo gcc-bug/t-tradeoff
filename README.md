@@ -122,3 +122,20 @@ recorded numbers are preserved rather than retroactively revised.
 Project-local ARA records claims, evidence, and research milestones in the
 ignored `ara/` directory. See [docs/ara.md](docs/ara.md) for the pinned setup,
 scope, and private publication policy.
+
+## Resource-Constrained HWP Synthesis
+
+The finite-library Pareto study is independent of historical pass-order search.
+It composes verified HWP/direct blocks in complete waves and answers minimum-T
+queries under depth and clean-workspace caps. Read
+[the model and construction audit](docs/hwp-pareto-model.md) and
+[the recorded study](reports/hwp-pareto-study.md).
+
+```bash
+python -m pip install -e '.[test,study]'
+python scripts/run_hwp_pareto.py --plot
+python scripts/run_hwp_pareto.py --verify
+```
+
+The exact guarantee applies to the declared finite library and wave model.
+Actual emitted circuits and optional optimized children are verified separately.
