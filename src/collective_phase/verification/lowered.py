@@ -87,20 +87,58 @@ def _allocated_tolerances(
     return total_error, total_error
 
 
+def _block_tolerances(lowered: LoweredCircuit, total_error: float) -> list[float] | None:
+    """Independently check the term-budget partition before checking matrices."""
+    blocks = lowered.candidate.parameters.get("term_error_blocks")
+    if blocks is None:
+        return None
+    from ..preprocessing import preprocess
+
+    candidate = lowered.candidate
+    if candidate.required_resource_states or candidate.parameters.get("reuse_count", 1) != 1:
+        raise ValueError("unsupported resource state/reuse with term budgets")
+    expected = {term.id for term in preprocess(candidate.program).terms}
+    covered: set[str] = set()
+    cursor = 0
+    result: list[float] = []
+    for block in blocks:
+        start, end = block["operations"]
+        ids = block["term_ids"]
+        if (start != cursor or not start < end <= len(candidate.operations)
+                or not ids or len(set(ids)) != len(ids)
+                or covered.intersection(ids) or not set(ids) <= expected):
+            raise ValueError("invalid term-budget partition")
+        covered.update(ids)
+        cursor = end
+        operations = candidate.operations[start:end]
+        if any(op.kind not in {"phase", "x", "cx", "toffoli"} for op in operations):
+            raise ValueError("unsupported operation in term-budget block")
+        phases = [candidate.program.angle_map[op.angle_id].scaled(op.multiplier)
+                  for op in operations if op.kind == "phase"]
+        generic_count = sum(not phase.is_exact_clifford_t for phase in phases)
+        tolerance = total_error * len(ids) / max(1, len(expected)) / max(1, generic_count)
+        result.extend([tolerance] * len(phases))
+    if cursor != len(candidate.operations) or covered != expected:
+        raise ValueError("incomplete term-budget partition")
+    return result
+
+
 def _validate_rotations(lowered: LoweredCircuit, total_error: float) -> str | None:
     application, preparation = _rotation_requests(lowered)
     try:
         app_tolerance, prep_tolerance = _allocated_tolerances(lowered, total_error)
-    except ValueError as exc:
+        app_tolerances = _block_tolerances(lowered, total_error)
+    except (ValueError, KeyError, TypeError) as exc:
         return str(exc)
     pairs = (
-        ("application", application, lowered.application_rotations, app_tolerance),
-        ("preparation", preparation, lowered.preparation_rotations, prep_tolerance),
+        ("application", application, lowered.application_rotations,
+         app_tolerances if app_tolerances is not None else [app_tolerance] * len(application)),
+        ("preparation", preparation, lowered.preparation_rotations, [prep_tolerance] * len(preparation)),
     )
-    for label, requests, results, allocated_tolerance in pairs:
-        if len(requests) != len(results):
+    for label, requests, results, tolerances in pairs:
+        if len(requests) != len(results) or len(tolerances) != len(requests):
             return f"{label} rotation count mismatch"
-        for request, result in zip(requests, results, strict=True):
+        for request, result, allocated_tolerance in zip(requests, results, tolerances, strict=True):
             if result.angle_key != request.cache_key:
                 return f"{label} rotation identity mismatch"
             numeric = (

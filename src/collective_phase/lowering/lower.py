@@ -195,6 +195,40 @@ def _allocate_tolerances(
     return total_error, total_error
 
 
+def block_rotation_tolerances(candidate: Candidate, total_error: float) -> list[float] | None:
+    """Fixed normalized-term budgets for independently synthesized complete blocks.
+
+    Ranges partition operations; term IDs partition the canonical normalized input.
+    This is deliberately unavailable to catalyst/reuse profiles.
+    """
+    blocks = candidate.parameters.get("term_error_blocks")
+    if blocks is None:
+        return None
+    from ..preprocessing import preprocess
+
+    if candidate.required_resource_states or candidate.parameters.get("reuse_count", 1) != 1:
+        raise ValueError("term error blocks require clean, single-use constructions")
+    terms = {term.id for term in preprocess(candidate.program).terms}
+    seen: list[str] = []
+    end = 0
+    tolerances: list[float] = []
+    for block in blocks:
+        start, stop = block["operations"]
+        ids = block["term_ids"]
+        if start != end or not start < stop <= len(candidate.operations) or not ids:
+            raise ValueError("term error blocks must partition the operation stream")
+        end = stop
+        seen.extend(ids)
+        requests = [candidate.program.angle_map[op.angle_id].scaled(op.multiplier)
+                    for op in candidate.operations[start:stop] if op.kind == "phase"]
+        generic = sum(not angle.is_exact_clifford_t for angle in requests)
+        allowance = total_error * len(ids) / max(1, len(terms))
+        tolerances.extend([allowance / max(1, generic)] * len(requests))
+    if end != len(candidate.operations) or len(seen) != len(set(seen)) or set(seen) != terms:
+        raise ValueError("term error blocks must cover each normalized term exactly once")
+    return tolerances
+
+
 def lower_candidate(
     candidate: Candidate,
     total_error: float,
@@ -206,7 +240,11 @@ def lower_candidate(
     app_tolerance, prep_tolerance = _allocate_tolerances(
         candidate, application_angles, preparation_angles, total_error
     )
-    app_results = [synthesizer.synthesize(angle, app_tolerance) for angle in application_angles]
+    app_tolerances = block_rotation_tolerances(candidate, total_error)
+    if app_tolerances is None:
+        app_tolerances = [app_tolerance] * len(application_angles)
+    app_results = [synthesizer.synthesize(angle, tolerance)
+                   for angle, tolerance in zip(application_angles, app_tolerances, strict=True)]
     prep_results = [synthesizer.synthesize(angle, prep_tolerance) for angle in preparation_angles]
     return lower_candidate_with_rotations(
         candidate, total_error, app_results, prep_results
