@@ -1,0 +1,19 @@
+publication_mode: undecided
+paper_policy: separate
+ara_policy: private
+ara_package: '@ara-commons/ara-skills'
+ara_package_version: '0.9.0'
+ara_package_integrity: 'sha512-sgFepbf8Xfz1hMqAqEMPgqYnJxj973HrPuvgoF16nwZqTffSwVdguT/5yGoN1gTSlB+r7nEeoTOP/qMHZAEqxQ=='
+anonymous_export:
+  include_git_history: false
+  include_paper: false
+  include_ara: false
+  allow_external_links: false
+research_lifecycle:
+  capture: automatic
+  compile: on-demand
+  verify: required-before-share
+  observe: local-only
+  ask: local-only
+  share: sanitized-snapshot-only
+  publish: disabled
