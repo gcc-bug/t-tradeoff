@@ -1,0 +1,69 @@
+session:
+  id: 2026-09-16_001
+  date: '2026-09-16'
+  started: 2026-09-16T17:12+08:00
+  last_turn: 2026-09-16T17:12+08:00
+  turn_count: 1
+  summary: Initialized private ARA from stored development evidence; staged structural-synthesis
+    advice without adopting a pivot.
+events_logged:
+- turn: 1
+  type: question
+  id: N07
+  routing: direct
+  provenance: user
+  summary: Assess proposed structural-synthesis direction.
+- turn: 1
+  type: observation
+  id: O01
+  routing: staged
+  provenance: ai-suggested
+  summary: Recommend retaining the resource-tradeoff objective and pausing additional
+    preference-controller development until a transformation or representation unavailable
+    to current baselines is identified. This is advice, not an adopted project decision.
+- turn: 1
+  type: observation
+  id: O02
+  routing: staged
+  provenance: ai-suggested
+  summary: 'A candidate study is uniform complete-bipartite cut phases: with population
+    counts u and v, F = b*u + a*v - 2*u*v. Binary expansion of u*v permits pairwise
+    controlled phases without explicitly computing a product register. Full count
+    computation, phasing, inverse cleanup, error allocation, depth, workspace, prior-work
+    coverage, and workload prevalence remain to be costed. No advantage or novelty
+    is established.'
+ai_actions:
+- turn: 1
+  action: Compiled source-bounded ARA; checked lifecycle wiring, source hashes, cross-layer
+    references, and exact report copies. No research experiments rerun.
+  provenance: ai-executed
+  files_changed:
+  - ara/
+  - AGENTS.md
+  - .research-repo.yml
+  - scripts/setup-ara.sh
+  - docs/ara.md
+  - README.md
+claims_touched:
+- id: C01
+  action: created
+  turn: 1
+- id: C02
+  action: created
+  turn: 1
+- id: C03
+  action: created
+  turn: 1
+logic_revisions: []
+key_context:
+- turn: 1
+  excerpt: The user requested assessment and ARA installation; external advice is
+    not approval to change research direction.
+open_threads:
+- Establish workload relevance and prior-work delta before implementing a structural
+  construction.
+- Cost complete reversible population-count/controlled-phase constructions under matched
+  error, workspace, and depth constraints.
+ai_suggestions_pending:
+- O01
+- O02

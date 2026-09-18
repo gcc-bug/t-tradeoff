@@ -1,0 +1,53 @@
+observations:
+- id: O01
+  timestamp: 2026-09-16T17:12+08:00
+  provenance: ai-suggested
+  content: Recommend retaining the resource-tradeoff objective and pausing additional
+    preference-controller development until a transformation or representation unavailable
+    to current baselines is identified. This is advice, not an adopted project decision.
+  context: Assessment of pasted advice against current repository evidence; no construction
+    implemented or benchmark rerun.
+  potential_type: unknown
+  bound_to:
+  - N07
+  - N05
+  promoted: false
+  promoted_to: null
+  crystallized_via: null
+  stale: false
+- id: O02
+  timestamp: 2026-09-16T17:12+08:00
+  provenance: ai-suggested
+  content: 'A candidate study is uniform complete-bipartite cut phases: with population
+    counts u and v, F = b*u + a*v - 2*u*v. Binary expansion of u*v permits pairwise
+    controlled phases without explicitly computing a product register. Full count
+    computation, phasing, inverse cleanup, error allocation, depth, workspace, prior-work
+    coverage, and workload prevalence remain to be costed. No advantage or novelty
+    is established.'
+  context: Assessment of pasted advice against current repository evidence; no construction
+    implemented or benchmark rerun.
+  potential_type: architecture
+  bound_to:
+  - N07
+  - N05
+  promoted: false
+  promoted_to: null
+  crystallized_via: null
+  stale: false
+- id: O03
+  timestamp: 2026-09-17T16:40+08:00
+  provenance: ai-suggested
+  content: Mixed batch sizes and layouts may improve constrained T-count on overlapping-parity workloads
+    when neither all-native nor all-copied grouping fits the budget. The current evidence is a single
+    development witness; repeatability, stronger construction comparisons, physical costs and novelty
+    remain unestablished.
+  context: Exact subset Pareto DP over restored unitary blocks; fair direct fallback and automatic layouts
+    eliminated most initial gains.
+  potential_type: claim
+  bound_to:
+  - N10
+  - N11
+  promoted: false
+  promoted_to: null
+  crystallized_via: null
+  stale: false

@@ -1,0 +1,17 @@
+entries:
+- turn: 2026-09-16_001#1
+  notes:
+  - Compiled existing report conclusions separately from staged advice.
+  - User supplied an AI opinion for assessment; this is not endorsement of a pivot.
+  - No closure signal for O01 or O02; both remain ai-suggested and unpromoted.
+- turn: 2026-09-17_001#1
+  notes:
+  - N08 records explicit authorization of this HWP implementation, superseding the historical not-yet-authorized
+    context without rewriting N07.
+  - N09/N10 retain the failed baseline diagnostic; N11 contains corrected outcomes. No discarded apparent
+    gain is promoted.
+  - 'O03 stays staged: user has not commented on the results; no closure for its proposed general mechanism.'
+  - O01 is broader advice and O02 proposes a different construction; neither is automatically adopted
+    by implementing this plan.
+  - C01-C03 concern earlier experiments and are unchanged. New evidence is snapshotted privately in both
+    worktrees with a separate source manifest.

@@ -1,0 +1,70 @@
+session:
+  id: 2026-09-17_001
+  date: '2026-09-17'
+  started: 2026-09-17T16:40+08:00
+  last_turn: 2026-09-17T16:40+08:00
+  turn_count: 1
+  summary: Implemented and ran HWP Pareto plan; corrected weak baselines; retained one bounded mixed-layout
+    gain.
+events_logged:
+- turn: 1
+  type: decision
+  id: N08
+  routing: direct
+  provenance: user
+  summary: Apply the finite-library HWP Pareto plan
+- turn: 1
+  type: experiment
+  id: N09
+  routing: direct
+  provenance: ai-executed
+  summary: Initial HWP Pareto baseline diagnostic
+- turn: 1
+  type: dead_end
+  id: N10
+  routing: direct
+  provenance: ai-executed
+  summary: Discard gains caused by forced HWP on remainder batches
+- turn: 1
+  type: experiment
+  id: N11
+  routing: direct
+  provenance: ai-executed
+  summary: Complete strengthened HWP Pareto study and replay
+- turn: 1
+  type: observation
+  id: O03
+  routing: staged
+  provenance: ai-suggested
+  summary: Possible mixed-construction mechanism; evidence limited to one development witness.
+ai_actions:
+- turn: 1
+  action: Implemented finite library, Pareto DP, verified emission, strong baselines and reproducible
+    study; ran full tests and saved-circuit replay; committed code/results in isolated worktree.
+  provenance: ai-executed
+  files_changed:
+  - src/collective_phase/hwp_pareto.py
+  - src/collective_phase/lowering/lower.py
+  - src/collective_phase/verification/lowered.py
+  - tests/test_hwp_pareto.py
+  - scripts/run_hwp_pareto.py
+  - configs/hwp-pareto-study.yaml
+  - reports/hwp-pareto-study.md
+  - results/hwp-pareto-study.json
+  - results/hwp-pareto-witness.json
+claims_touched: []
+logic_revisions: []
+key_context:
+- turn: 1
+  excerpt: 'User: "ok try apply the plan and recore the results". This authorizes the HWP experiment;
+    it does not endorse the resulting interpretation or the older bipartite-product proposal.'
+open_threads:
+- Determine whether the mixed-layout witness repeats on fresh instances and survives additional unitary
+  construction families.
+- Published accumulated-weight, measurement-assisted and catalytic constructions were not implemented;
+  no global or literature-frontier claim.
+- O02 bipartite-product construction remains unadopted.
+ai_suggestions_pending:
+- O01
+- O02
+- O03

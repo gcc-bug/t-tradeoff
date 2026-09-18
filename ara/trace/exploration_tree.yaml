@@ -1,0 +1,145 @@
+tree:
+- id: N01
+  type: question
+  support_level: explicit
+  source_refs:
+  - README.md
+  - docs/resource-model.md
+  title: Resource tradeoffs for collective parity phases
+  description: Explore emitted, verified circuits under fixed error, depth, count,
+    and clean-workspace constraints.
+  children:
+  - id: N02
+    type: experiment
+    support_level: explicit
+    source_refs:
+    - reports/iterative-ancilla.md
+    title: Matched balanced-policy comparison
+    result: Adaptive and frozen priorities tie; static and fixed portfolios are mixed
+      controls.
+    evidence:
+    - C01
+  - id: N03
+    type: experiment
+    support_level: explicit
+    source_refs:
+    - reports/ancilla-depth.md
+    title: Exact ancilla-for-depth diagnostic
+    result: Clean scratch lowers phase depth without reducing T-count; frozen priorities
+      tie adaptive.
+    evidence:
+    - C01
+    - C03
+  - id: N04
+    type: experiment
+    support_level: explicit
+    source_refs:
+    - reports/ancilla-count.md
+    title: Count-first negative control
+    result: T-count is unchanged across the compared policies.
+    evidence:
+    - C01
+    - C03
+  - id: N05
+    type: experiment
+    support_level: explicit
+    source_refs:
+    - reports/single-demonstration.md
+    - results/single-demonstration/results.json
+    title: Bounded single-sequence discovery and counterfactuals
+    result: Fixed count-then-depth reaches the discovered winner; reuse occurs but
+      is not enabling.
+    evidence:
+    - C02
+    - C03
+    children:
+    - id: N06
+      type: decision
+      support_level: explicit
+      source_refs:
+      - reports/single-demonstration.md
+      title: Do not claim an adaptive-policy advantage
+      choice: The report adds no new policy rule or adaptive-quality claim.
+      alternatives:
+      - Attribute the discovered endpoint to preference updates.
+      evidence:
+      - C02
+- id: N07
+  type: question
+  support_level: explicit
+  source_refs:
+  - evidence/context/website-feedback.md
+  title: Assess structural synthesis as the next research direction
+  description: The user asks for an assessment of externally supplied advice to retain
+    the tradeoff objective and shift effort from pass-order search toward high-level
+    construction. No pivot has been authorized.
+  provenance: user
+  timestamp: 2026-09-16T17:12+08:00
+  status: open
+  also_depends_on:
+  - N02
+  - N05
+- id: N08
+  type: decision
+  title: Apply the finite-library HWP Pareto plan
+  provenance: user
+  timestamp: 2026-09-17T16:40+08:00
+  parent: N07
+  also_depends_on:
+  - N07
+  choice: Implement and run the resource-constrained HWP plan; record actual results.
+  alternatives:
+  - Continue discussion without running the proposed diagnostic.
+  evidence:
+  - evidence/hwp-pareto/hwp-pareto-plan.md
+  - trace/sessions/2026-09-17_001.yaml:key_context
+  status: resolved
+- id: N09
+  type: experiment
+  title: Initial HWP Pareto baseline diagnostic
+  provenance: ai-executed
+  timestamp: 2026-09-17T16:40+08:00
+  also_depends_on:
+  - N08
+  result: The initial baseline forced HWP on every batch and produced eight apparent new model points
+    across four cases. These outcomes are superseded by the strengthened baseline.
+  evidence:
+  - evidence/hwp-pareto/superseded-study-report.md
+  - evidence/hwp-pareto/superseded-study-summary.json
+  status: resolved
+- id: N10
+  type: dead_end
+  title: Discard gains caused by forced HWP on remainder batches
+  provenance: ai-executed
+  timestamp: 2026-09-17T16:40+08:00
+  also_depends_on:
+  - N09
+  hypothesis: The eight initial model points represent advantages over fair batching references.
+  failure_mode: Forcing HWP on unprofitable baseline batches inflated reference costs; allowing direct
+    fallback removed seven apparent gains.
+  lesson: Permit independent direct fallback per batch and automatic eligible layouts before attributing
+    a gain to mixed construction synthesis.
+  evidence:
+  - evidence/hwp-pareto/hwp-pareto-study.md
+  status: resolved
+- id: N11
+  type: experiment
+  title: Complete strengthened HWP Pareto study and replay
+  provenance: ai-executed
+  timestamp: 2026-09-17T16:40+08:00
+  also_depends_on:
+  - N08
+  - N10
+  tests_observation:
+  - O03
+  result: 'All nine searches and baseline enumerations completed. Only overlapping_6 adds a model point:
+    (T,D,A)=(284,166,3). At A<=3 and D<=200 the best reference is (312,156,0), saving 28 T gates. The
+    optimized child (278,218,3) violates this depth cap; the valid parent remains available. The other
+    eight cases add no new model point. 129 tests passed; replay verified 158 templates, 52 parents, 52
+    optimized children and the tracked witness.'
+  evidence:
+  - evidence/hwp-pareto/hwp-pareto-study.md
+  - evidence/hwp-pareto/hwp-pareto-study.json
+  - evidence/hwp-pareto/hwp-pareto-witness.json
+  - evidence/hwp-pareto/hwp-pareto-validation.md
+  status: resolved

@@ -1,0 +1,19 @@
+sessions:
+- id: 2026-09-16_001
+  date: '2026-09-16'
+  summary: Private ARA initialized; structural-synthesis proposal remains unconfirmed.
+  turn_count: 1
+  events_count: 3
+  claims_touched:
+  - C01
+  - C02
+  - C03
+  open_threads: 2
+- id: 2026-09-17_001
+  date: '2026-09-17'
+  summary: Implemented and ran HWP Pareto plan; corrected weak baselines; retained one bounded mixed-layout
+    gain.
+  turn_count: 1
+  events_count: 5
+  claims_touched: []
+  open_threads: 3

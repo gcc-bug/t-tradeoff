@@ -1,0 +1,47 @@
+schema_version: 1
+run_id: hwp-pareto-study
+selection_rule: >-
+  Frozen before inspecting outcomes: native layers including nonpowers of two,
+  two heterogeneous compatible groups, overlapping parities, one previously
+  used checksum-pinned QED-C development graph, and a distinct-angle control.
+total_error: 1.0e-4
+seed: 0
+model_profile: unitary_clifford_t
+precision_policy: normalized_term_blocks_v1
+max_terms: 8
+max_batch: 8
+ancilla_caps: [0, 1, 2, 3, 4, 6, 8]
+depth_caps: [0, 40, 60, 80, 100, 140, 200, 300, 500]
+search_seconds: 120
+baseline_seconds: 180
+optimization:
+  action: zx_extract
+  seconds: 15
+  verification_seconds: 15
+cases:
+  - {id: native_3, kind: native, n: 3, angle: '0.173'}
+  - {id: native_4, kind: native, n: 4, angle: '0.173'}
+  - {id: native_5, kind: native, n: 5, angle: '0.173'}
+  - {id: native_6, kind: native, n: 6, angle: '0.173'}
+  - {id: native_8, kind: native, n: 8, angle: '0.173'}
+  - id: heterogeneous_3_2
+    kind: groups
+    groups:
+      - {size: 3, angle: '0.173'}
+      - {size: 2, angle: '0.291'}
+  - {id: overlapping_6, kind: masks, n: 3, masks: [1, 2, 3, 4, 5, 6], angle: '0.173'}
+  - id: qedc_mc_004_003_000
+    kind: qedc
+    manifest: data/manifests/refocus-study.yaml
+    angle: '0.173'
+    sha256: 28b8c06d893be9a6f5cff7524efde38749861cce15fa281b8a346a091ae9d658
+  - id: distinct_angles_4
+    kind: groups
+    groups:
+      - {size: 1, angle: '0.173'}
+      - {size: 1, angle: '0.291'}
+      - {size: 1, angle: '0.419'}
+      - {size: 1, angle: '0.537'}
+results_dir: results/raw/hwp-pareto-study
+summary_path: results/hwp-pareto-study.json
+report_path: reports/hwp-pareto-study.md

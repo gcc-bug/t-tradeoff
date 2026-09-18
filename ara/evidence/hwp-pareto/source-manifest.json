@@ -1,0 +1,66 @@
+{
+  "provenance": "ai-executed",
+  "captured_at": "2026-09-17T16:40+08:00",
+  "worktree": "/home/cc_g/work/T_optimize/t-tradeoff-hwp-pareto",
+  "branch": "research/hwp-pareto-synthesis",
+  "recorded_revision": "47d71a791413a85776cdf9f517a6a237b3e510d5",
+  "files": [
+    {
+      "source": "reports/hwp-pareto-study.md",
+      "snapshot": "hwp-pareto-study.md",
+      "sha256": "d104c5fc6a40040925617abca27d35810c43a5b4e554a36d6d4ad84613d70b1e"
+    },
+    {
+      "source": "reports/hwp-pareto-validation.md",
+      "snapshot": "hwp-pareto-validation.md",
+      "sha256": "034ae8bef6ba1f85a642712be2d14d403c75b82c4a4bf9b0a5b9c6dc48657cc6"
+    },
+    {
+      "source": "reports/hwp-pareto-frontier.png",
+      "snapshot": "hwp-pareto-frontier.png",
+      "sha256": "920eed690dbc4d3aab334dd9184ea6de843a014c1fadb61906b49f5516f6cd97"
+    },
+    {
+      "source": "results/hwp-pareto-study.json",
+      "snapshot": "hwp-pareto-study.json",
+      "sha256": "d1ade1b1b47898654ff0958f07233d70def1ae756d378160d2078a19e365ed9d"
+    },
+    {
+      "source": "results/hwp-pareto-witness.json",
+      "snapshot": "hwp-pareto-witness.json",
+      "sha256": "4059ed93f59794ced4bb468cc7be23d9b346a9eacdca3db02ed2a2779aa14223"
+    },
+    {
+      "source": "configs/hwp-pareto-study.yaml",
+      "snapshot": "hwp-pareto-study.yaml",
+      "sha256": "17c65715367b79b50f18a47c188df384bcfa8628c884f9411c4b910e938da861"
+    },
+    {
+      "source": "docs/hwp-pareto-model.md",
+      "snapshot": "hwp-pareto-model.md",
+      "sha256": "b9a8aa0505908b0612aa7b717ead8cac7d50ed89dcae0079c3c3befe72f61783"
+    },
+    {
+      "source": "docs/hwp-pareto-plan.md",
+      "snapshot": "hwp-pareto-plan.md",
+      "sha256": "2a9373113e18396406b59b449a95ad381fe4607590f1580aed6e09fe3a46bb84"
+    },
+    {
+      "source": "results/raw/hwp-pareto-study-initial-baseline/study-summary.json",
+      "snapshot": "superseded-study-summary.json",
+      "sha256": "6a471bd1b400c53e3de52921b2bd8c752e0c36d9ecc9ade6db85c06dfb348da2"
+    },
+    {
+      "source": "results/raw/hwp-pareto-study-initial-baseline/study-report.md",
+      "snapshot": "superseded-study-report.md",
+      "sha256": "2455d53df8d258b665903a508e85d2d185d741be39ddb99fb6a488ab2c94f361"
+    },
+    {
+      "source": "results/raw/hwp-pareto-study-initial-baseline/README.md",
+      "snapshot": "superseded-README.md",
+      "sha256": "fd8d85ad9b2dab9cbac5d7dcc4a00e457483024bfa019f3632b00420b54a3484"
+    }
+  ],
+  "raw_results": "/home/cc_g/work/T_optimize/t-tradeoff-hwp-pareto/results/raw/hwp-pareto-study",
+  "superseded_raw_results": "/home/cc_g/work/T_optimize/t-tradeoff-hwp-pareto/results/raw/hwp-pareto-study-initial-baseline"
+}

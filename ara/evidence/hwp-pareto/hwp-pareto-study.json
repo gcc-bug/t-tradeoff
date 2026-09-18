@@ -1,0 +1,5800 @@
+{
+  "cases": [
+    {
+      "artifact_sha256": {
+        "native_3-circuits.json.gz": "ef9b7d7b7ff44f5de99ef2bb16da80d03131b50c40a38031bd3c5d74beb38aa8",
+        "native_3-library.json.gz": "b7d2d7ea3be16187309e81709ed82302c0eb48a19f7935fdc617a0e81d78f907"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 9,
+      "baseline_seconds": 0.0003663020033854991,
+      "case": "native_3",
+      "circuit_artifact": "results/raw/hwp-pareto-study/native_3-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.019002281012944877,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              150,
+              0
+            ],
+            [
+              164,
+              106,
+              1
+            ]
+          ],
+          "post": [
+            [
+              102,
+              98,
+              1
+            ],
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              150,
+              50,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              102,
+              98,
+              1
+            ],
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              102,
+              98,
+              1
+            ],
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              102,
+              98,
+              1
+            ],
+            [
+              108,
+              54,
+              1
+            ],
+            [
+              150,
+              50,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 3,
+        "options": 11,
+        "seconds": 0.00797094899462536,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 6,
+        "templates": 5
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/native_3-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 0.8095477270253468,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "native_3:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_3:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_3:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_3:term:2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "native_3",
+        "metadata": {},
+        "qubit_count": 3,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 174,
+          "emitted": [
+            108,
+            54,
+            1
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            108,
+            54,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            102,
+            98,
+            1
+          ],
+          "post": [
+            102,
+            98,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              9
+            ]
+          ]
+        },
+        {
+          "cliffords": 243,
+          "emitted": [
+            150,
+            50,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            150,
+            50,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            150,
+            50,
+            0
+          ],
+          "post": [
+            150,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2
+            ]
+          ]
+        },
+        {
+          "cliffords": 243,
+          "emitted": [
+            150,
+            50,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p2",
+          "model": [
+            150,
+            150,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            150,
+            50,
+            0
+          ],
+          "post": [
+            150,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ]
+        },
+        {
+          "cliffords": 257,
+          "emitted": [
+            164,
+            56,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p3",
+          "model": [
+            164,
+            106,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            156,
+            102,
+            1
+          ],
+          "post": [
+            156,
+            102,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              3
+            ],
+            [
+              2
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 5,
+        "depth_max": null,
+        "labels_considered": 9,
+        "peak_labels_per_state": 2,
+        "seconds": 0.00013125900295563042,
+        "states": 5,
+        "waves": 22
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "native_4-circuits.json.gz": "36c133630625aa1a6a52dbf1972aed14db28dad9cc653368787e86efd2a47559",
+        "native_4-library.json.gz": "8b060f0bca9b1ef250f6e0442d12b7ea1a24314bc7aeae345b2d2f08b3c64870"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 29,
+      "baseline_seconds": 0.0012557249865494668,
+      "case": "native_4",
+      "circuit_artifact": "results/raw/hwp-pareto-study/native_4-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.03911733499262482,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              200,
+              200,
+              0
+            ],
+            [
+              228,
+              112,
+              1
+            ]
+          ],
+          "post": [
+            [
+              176,
+              67,
+              3
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              200,
+              50,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              160,
+              57,
+              1
+            ],
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              160,
+              57,
+              1
+            ],
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              160,
+              57,
+              1
+            ],
+            [
+              164,
+              56,
+              1
+            ],
+            [
+              200,
+              50,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 4,
+        "options": 26,
+        "seconds": 0.014352024998515844,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 19,
+        "templates": 7
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/native_4-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 1.984987572999671,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "native_4:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_4:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_4:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_4:term:2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_4:term:3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "native_4",
+        "metadata": {},
+        "qubit_count": 4,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 259,
+          "emitted": [
+            164,
+            56,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            164,
+            56,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            160,
+            57,
+            1
+          ],
+          "post": [
+            160,
+            57,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              22
+            ]
+          ]
+        },
+        {
+          "cliffords": 280,
+          "emitted": [
+            200,
+            50,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            200,
+            50,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            200,
+            50,
+            0
+          ],
+          "post": [
+            200,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3
+            ]
+          ]
+        },
+        {
+          "cliffords": 280,
+          "emitted": [
+            200,
+            50,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p2",
+          "model": [
+            200,
+            200,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            200,
+            50,
+            0
+          ],
+          "post": [
+            200,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ]
+        },
+        {
+          "cliffords": 332,
+          "emitted": [
+            228,
+            112,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p3",
+          "model": [
+            228,
+            112,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            220,
+            110,
+            1
+          ],
+          "post": [
+            220,
+            110,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              4
+            ],
+            [
+              14
+            ]
+          ]
+        },
+        {
+          "cliffords": 300,
+          "emitted": [
+            190,
+            68,
+            3
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p4",
+          "model": [
+            190,
+            68,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            176,
+            67,
+            3
+          ],
+          "post": [
+            176,
+            67,
+            3
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              24
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 18,
+        "depth_max": null,
+        "labels_considered": 27,
+        "peak_labels_per_state": 2,
+        "seconds": 0.0002967790060210973,
+        "states": 9,
+        "waves": 103
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "native_5-circuits.json.gz": "82d55ea724dad65fa902a5b79108bab6a3b219376a382a9f1029bdc1593afac3",
+        "native_5-library.json.gz": "f0e8d96bb4ecb25dcad17cf8ceffd783c831c97b9b740f101b5685a0686cf7d2"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 103,
+      "baseline_seconds": 0.008571520011173561,
+      "case": "native_5",
+      "circuit_artifact": "results/raw/hwp-pareto-study/native_5-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.061161927005741745,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              230,
+              114,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              230,
+              114,
+              1
+            ],
+            [
+              250,
+              250,
+              0
+            ],
+            [
+              282,
+              166,
+              1
+            ]
+          ],
+          "post": [
+            [
+              178,
+              66,
+              3
+            ],
+            [
+              224,
+              164,
+              1
+            ],
+            [
+              230,
+              114,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              250,
+              50,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              178,
+              66,
+              3
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              178,
+              66,
+              3
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              190,
+              68,
+              3
+            ],
+            [
+              214,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              178,
+              66,
+              3
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              250,
+              50,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 5,
+        "options": 57,
+        "seconds": 0.02595607002149336,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 48,
+        "templates": 9
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/native_5-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 3.0211925100302324,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "native_5:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_5:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_5:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_5:term:2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_5:term:3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_5:term:4",
+                "mask": 16,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "native_5",
+        "metadata": {},
+        "qubit_count": 5,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 308,
+          "emitted": [
+            190,
+            68,
+            3
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            190,
+            68,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            178,
+            66,
+            3
+          ],
+          "post": [
+            178,
+            66,
+            3
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              55
+            ]
+          ]
+        },
+        {
+          "cliffords": 327,
+          "emitted": [
+            214,
+            56,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            214,
+            56,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            210,
+            56,
+            1
+          ],
+          "post": [
+            210,
+            56,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              43
+            ]
+          ]
+        },
+        {
+          "cliffords": 350,
+          "emitted": [
+            250,
+            50,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p2",
+          "model": [
+            250,
+            50,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            250,
+            50,
+            0
+          ],
+          "post": [
+            250,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        },
+        {
+          "cliffords": 350,
+          "emitted": [
+            250,
+            50,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p3",
+          "model": [
+            250,
+            250,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            250,
+            50,
+            0
+          ],
+          "post": [
+            250,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ]
+        },
+        {
+          "cliffords": 422,
+          "emitted": [
+            282,
+            116,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p4",
+          "model": [
+            282,
+            166,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            276,
+            169,
+            1
+          ],
+          "post": [
+            276,
+            169,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              5
+            ],
+            [
+              19
+            ],
+            [
+              4
+            ]
+          ]
+        },
+        {
+          "cliffords": 363,
+          "emitted": [
+            230,
+            114,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p5",
+          "model": [
+            230,
+            114,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            224,
+            164,
+            1
+          ],
+          "post": [
+            224,
+            164,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              25
+            ],
+            [
+              23
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 60,
+        "depth_max": null,
+        "labels_considered": 82,
+        "peak_labels_per_state": 3,
+        "seconds": 0.013440666982205585,
+        "states": 17,
+        "waves": 524
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "native_6-circuits.json.gz": "e4f9c7e80d58e93256e9d8545c7885e9e9d76391f42b1bab7a1659a4d24bf055",
+        "native_6-library.json.gz": "0788b39f67356b130603d03b8ce33f55ec500d11086f6f48981a351ec6de1416"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 285,
+      "baseline_seconds": 0.037934970983769745,
+      "case": "native_6",
+      "circuit_artifact": "results/raw/hwp-pareto-study/native_6-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.05604204995324835,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              312,
+              312,
+              0
+            ],
+            [
+              354,
+              174,
+              1
+            ]
+          ],
+          "post": [
+            [
+              184,
+              71,
+              4
+            ],
+            [
+              220,
+              161,
+              1
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              312,
+              52,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              184,
+              71,
+              4
+            ],
+            [
+              220,
+              107,
+              2
+            ],
+            [
+              220,
+              161,
+              1
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              266,
+              57,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              184,
+              71,
+              4
+            ],
+            [
+              220,
+              107,
+              2
+            ],
+            [
+              220,
+              161,
+              1
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              266,
+              57,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              204,
+              74,
+              4
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              184,
+              71,
+              4
+            ],
+            [
+              220,
+              107,
+              2
+            ],
+            [
+              220,
+              161,
+              1
+            ],
+            [
+              228,
+              56,
+              2
+            ],
+            [
+              228,
+              112,
+              1
+            ],
+            [
+              266,
+              57,
+              1
+            ],
+            [
+              270,
+              56,
+              1
+            ],
+            [
+              312,
+              52,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 6,
+        "options": 120,
+        "seconds": 0.052057161985430866,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 109,
+        "templates": 11
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/native_6-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 4.558509588066954,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "native_6:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:4",
+                "mask": 16,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_6:term:5",
+                "mask": 32,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "native_6",
+        "metadata": {},
+        "qubit_count": 6,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 336,
+          "emitted": [
+            204,
+            74,
+            4
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            204,
+            74,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            184,
+            71,
+            4
+          ],
+          "post": [
+            184,
+            71,
+            4
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              118
+            ]
+          ]
+        },
+        {
+          "cliffords": 348,
+          "emitted": [
+            228,
+            56,
+            2
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            228,
+            56,
+            2
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            220,
+            107,
+            2
+          ],
+          "post": [
+            220,
+            107,
+            2
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              36,
+              74
+            ]
+          ]
+        },
+        {
+          "cliffords": 348,
+          "emitted": [
+            228,
+            112,
+            1
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p2",
+          "model": [
+            228,
+            112,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            220,
+            161,
+            1
+          ],
+          "post": [
+            220,
+            161,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              36
+            ],
+            [
+              74
+            ]
+          ]
+        },
+        {
+          "cliffords": 438,
+          "emitted": [
+            270,
+            56,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p3",
+          "model": [
+            270,
+            56,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            266,
+            57,
+            1
+          ],
+          "post": [
+            266,
+            57,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              74
+            ]
+          ]
+        },
+        {
+          "cliffords": 528,
+          "emitted": [
+            312,
+            52,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p4",
+          "model": [
+            312,
+            52,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            52,
+            0
+          ],
+          "post": [
+            312,
+            52,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          ]
+        },
+        {
+          "cliffords": 528,
+          "emitted": [
+            312,
+            52,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p5",
+          "model": [
+            312,
+            312,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            52,
+            0
+          ],
+          "post": [
+            312,
+            52,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ]
+        },
+        {
+          "cliffords": 582,
+          "emitted": [
+            354,
+            174,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p6",
+          "model": [
+            354,
+            174,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            344,
+            223,
+            1
+          ],
+          "post": [
+            344,
+            223,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              6
+            ],
+            [
+              24
+            ],
+            [
+              34
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 196,
+        "depth_max": null,
+        "labels_considered": 265,
+        "peak_labels_per_state": 5,
+        "seconds": 0.007568956993054599,
+        "states": 33,
+        "waves": 2870
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "native_8-circuits.json.gz": "5eee03256b9d28d01e2394c2845093fa2e6c9dff41cbcaa7d83e32cd13e33b77",
+        "native_8-library.json.gz": "facd12662827e0fe72cfcdc9c58824ea73ee21adc53a1423921376f29a98a35a"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 4443,
+      "baseline_seconds": 1.1820154339948203,
+      "case": "native_8",
+      "circuit_artifact": "results/raw/hwp-pareto-study/native_8-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.07246228796429932,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              296,
+              86,
+              7
+            ],
+            [
+              350,
+              174,
+              1
+            ],
+            [
+              396,
+              140,
+              3
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              296,
+              86,
+              7
+            ],
+            [
+              350,
+              174,
+              1
+            ],
+            [
+              396,
+              140,
+              3
+            ],
+            [
+              416,
+              416,
+              0
+            ],
+            [
+              472,
+              232,
+              1
+            ]
+          ],
+          "post": [
+            [
+              262,
+              130,
+              7
+            ],
+            [
+              296,
+              86,
+              7
+            ],
+            [
+              340,
+              276,
+              1
+            ],
+            [
+              350,
+              174,
+              1
+            ],
+            [
+              396,
+              140,
+              3
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              416,
+              52,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              238,
+              126,
+              4
+            ],
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              294,
+              127,
+              3
+            ],
+            [
+              296,
+              69,
+              4
+            ],
+            [
+              330,
+              168,
+              1
+            ],
+            [
+              332,
+              109,
+              2
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              374,
+              59,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              238,
+              126,
+              4
+            ],
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              294,
+              127,
+              3
+            ],
+            [
+              296,
+              69,
+              4
+            ],
+            [
+              330,
+              168,
+              1
+            ],
+            [
+              332,
+              109,
+              2
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              374,
+              59,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "model": [
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              312,
+              70,
+              4
+            ],
+            [
+              312,
+              128,
+              3
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ],
+          "post": [
+            [
+              238,
+              126,
+              4
+            ],
+            [
+              256,
+              74,
+              4
+            ],
+            [
+              294,
+              127,
+              3
+            ],
+            [
+              296,
+              69,
+              4
+            ],
+            [
+              330,
+              168,
+              1
+            ],
+            [
+              332,
+              109,
+              2
+            ],
+            [
+              336,
+              58,
+              2
+            ],
+            [
+              336,
+              116,
+              1
+            ],
+            [
+              374,
+              59,
+              1
+            ],
+            [
+              376,
+              58,
+              1
+            ],
+            [
+              416,
+              52,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 8,
+        "options": 502,
+        "seconds": 0.22839800198562443,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 487,
+        "templates": 15
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/native_8-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 14.779295678046765,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "native_8:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:4",
+                "mask": 16,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:5",
+                "mask": 32,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:6",
+                "mask": 64,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "native_8:term:7",
+                "mask": 128,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "native_8",
+        "metadata": {},
+        "qubit_count": 8,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 422,
+          "emitted": [
+            256,
+            74,
+            4
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            256,
+            74,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            238,
+            126,
+            4
+          ],
+          "post": [
+            238,
+            126,
+            4
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              498
+            ]
+          ]
+        },
+        {
+          "cliffords": 504,
+          "emitted": [
+            312,
+            70,
+            4
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            312,
+            70,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            296,
+            69,
+            4
+          ],
+          "post": [
+            296,
+            69,
+            4
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              64,
+              426
+            ]
+          ]
+        },
+        {
+          "cliffords": 504,
+          "emitted": [
+            312,
+            128,
+            3
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p2",
+          "model": [
+            312,
+            128,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            294,
+            127,
+            3
+          ],
+          "post": [
+            294,
+            127,
+            3
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              64
+            ],
+            [
+              426
+            ]
+          ]
+        },
+        {
+          "cliffords": 544,
+          "emitted": [
+            336,
+            58,
+            2
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p3",
+          "model": [
+            336,
+            58,
+            2
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            332,
+            109,
+            2
+          ],
+          "post": [
+            332,
+            109,
+            2
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              1,
+              136,
+              174
+            ]
+          ]
+        },
+        {
+          "cliffords": 544,
+          "emitted": [
+            336,
+            116,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p4",
+          "model": [
+            336,
+            116,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            330,
+            168,
+            1
+          ],
+          "post": [
+            330,
+            168,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              1,
+              136
+            ],
+            [
+              174
+            ]
+          ]
+        },
+        {
+          "cliffords": 624,
+          "emitted": [
+            376,
+            58,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p5",
+          "model": [
+            376,
+            58,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            374,
+            59,
+            1
+          ],
+          "post": [
+            374,
+            59,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              174
+            ]
+          ]
+        },
+        {
+          "cliffords": 704,
+          "emitted": [
+            416,
+            52,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p6",
+          "model": [
+            416,
+            52,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            416,
+            52,
+            0
+          ],
+          "post": [
+            416,
+            52,
+            0
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ]
+        },
+        {
+          "cliffords": 704,
+          "emitted": [
+            416,
+            52,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p7",
+          "model": [
+            416,
+            416,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            416,
+            52,
+            0
+          ],
+          "post": [
+            416,
+            52,
+            0
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ],
+            [
+              6
+            ],
+            [
+              7
+            ]
+          ]
+        },
+        {
+          "cliffords": 776,
+          "emitted": [
+            472,
+            232,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p8",
+          "model": [
+            472,
+            232,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            458,
+            337,
+            1
+          ],
+          "post": [
+            458,
+            337,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              8
+            ],
+            [
+              34
+            ],
+            [
+              52
+            ],
+            [
+              62
+            ]
+          ]
+        },
+        {
+          "cliffords": 562,
+          "emitted": [
+            350,
+            174,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p9",
+          "model": [
+            350,
+            174,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            340,
+            276,
+            1
+          ],
+          "post": [
+            340,
+            276,
+            1
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              64
+            ],
+            [
+              156
+            ],
+            [
+              62
+            ]
+          ]
+        },
+        {
+          "cliffords": 650,
+          "emitted": [
+            396,
+            140,
+            3
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p10",
+          "model": [
+            396,
+            140,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            364,
+            232,
+            3
+          ],
+          "post": [
+            364,
+            232,
+            3
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              176
+            ],
+            [
+              314
+            ]
+          ]
+        },
+        {
+          "cliffords": 468,
+          "emitted": [
+            296,
+            86,
+            7
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p11",
+          "model": [
+            296,
+            86,
+            7
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            262,
+            130,
+            7
+          ],
+          "post": [
+            262,
+            130,
+            7
+          ],
+          "post_verification": "verified_lowered_external_compositional",
+          "verification": "verified_lowered_compositional",
+          "waves": [
+            [
+              500
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 2051,
+        "depth_max": null,
+        "labels_considered": 2885,
+        "peak_labels_per_state": 7,
+        "seconds": 0.7634166399948299,
+        "states": 129,
+        "waves": 103056
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "heterogeneous_3_2-circuits.json.gz": "facf9f90108f16837f6d8bc3b3862ddfd7b4c1a2d6a965ce2a02de57a2bacab6",
+        "heterogeneous_3_2-library.json.gz": "fc155c3f6c60565ed90cfdab7092c890b74e37c1bed88e806442a0ad207443e3"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 27,
+      "baseline_seconds": 0.0024003750004339963,
+      "case": "heterogeneous_3_2",
+      "circuit_artifact": "results/raw/hwp-pareto-study/heterogeneous_3_2-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.05558546897373162,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              224,
+              110,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              224,
+              110,
+              1
+            ],
+            [
+              246,
+              246,
+              0
+            ],
+            [
+              276,
+              162,
+              1
+            ]
+          ],
+          "post": [
+            [
+              216,
+              156,
+              1
+            ],
+            [
+              224,
+              110,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              246,
+              50,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              206,
+              102,
+              1
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              206,
+              102,
+              1
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              206,
+              102,
+              1
+            ],
+            [
+              210,
+              56,
+              1
+            ],
+            [
+              246,
+              50,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 5,
+        "options": 15,
+        "seconds": 0.009236057987436652,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 7,
+        "templates": 8
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/heterogeneous_3_2-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 2.3960493270133156,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "a0",
+            "value": "0.173"
+          },
+          {
+            "id": "a1",
+            "value": "0.291"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "block",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "a0",
+                "coefficient": 1,
+                "id": "t0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a0",
+                "coefficient": 1,
+                "id": "t1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a0",
+                "coefficient": 1,
+                "id": "t2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a1",
+                "coefficient": 1,
+                "id": "t3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a1",
+                "coefficient": 1,
+                "id": "t4",
+                "mask": 16,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "heterogeneous_3_2",
+        "metadata": {},
+        "qubit_count": 5,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 347,
+          "emitted": [
+            210,
+            56,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            210,
+            56,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            206,
+            102,
+            1
+          ],
+          "post": [
+            206,
+            102,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              9,
+              11,
+              12
+            ]
+          ]
+        },
+        {
+          "cliffords": 370,
+          "emitted": [
+            246,
+            50,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            246,
+            50,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            246,
+            50,
+            0
+          ],
+          "post": [
+            246,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              11,
+              12
+            ]
+          ]
+        },
+        {
+          "cliffords": 370,
+          "emitted": [
+            246,
+            50,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p2",
+          "model": [
+            246,
+            246,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            246,
+            50,
+            0
+          ],
+          "post": [
+            246,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              11
+            ],
+            [
+              12
+            ]
+          ]
+        },
+        {
+          "cliffords": 424,
+          "emitted": [
+            276,
+            112,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p3",
+          "model": [
+            276,
+            162,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            268,
+            159,
+            1
+          ],
+          "post": [
+            268,
+            159,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              3
+            ],
+            [
+              2
+            ],
+            [
+              13
+            ]
+          ]
+        },
+        {
+          "cliffords": 365,
+          "emitted": [
+            224,
+            110,
+            1
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p4",
+          "model": [
+            224,
+            110,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            216,
+            156,
+            1
+          ],
+          "post": [
+            216,
+            156,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              9
+            ],
+            [
+              13
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 44,
+        "depth_max": null,
+        "labels_considered": 60,
+        "peak_labels_per_state": 2,
+        "seconds": 0.0004555369960144162,
+        "states": 17,
+        "waves": 168
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "overlapping_6-circuits.json.gz": "f3f2629ebdda541bb4d0f20771a1ffb51565d027f69a4a31cfc11ea123442eb5",
+        "overlapping_6-library.json.gz": "794fc4ea8af653da33f73c8b8fa3f8a1a976b5731859bb3fa26c855a79bbba97"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 178,
+      "baseline_seconds": 0.008026302995858714,
+      "case": "overlapping_6",
+      "circuit_artifact": "results/raw/hwp-pareto-study/overlapping_6-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 23,
+          "T_win": 1,
+          "both_infeasible": 39
+        },
+        "model": {
+          "T_tie": 23,
+          "T_win": 1,
+          "both_infeasible": 39
+        },
+        "post": {
+          "T_tie": 23,
+          "T_win": 1,
+          "both_infeasible": 39
+        }
+      },
+      "constrained_differences": {
+        "emitted": [
+          {
+            "ancilla_cap": 3,
+            "baseline": [
+              312,
+              156,
+              0
+            ],
+            "delta_T": 28,
+            "depth_cap": 200,
+            "outcome": "T_win",
+            "proposed": [
+              284,
+              166,
+              3
+            ]
+          }
+        ],
+        "model": [
+          {
+            "ancilla_cap": 3,
+            "baseline": [
+              312,
+              156,
+              0
+            ],
+            "delta_T": 28,
+            "depth_cap": 200,
+            "outcome": "T_win",
+            "proposed": [
+              284,
+              166,
+              3
+            ]
+          }
+        ],
+        "post": [
+          {
+            "ancilla_cap": 3,
+            "baseline": [
+              312,
+              156,
+              0
+            ],
+            "delta_T": 28,
+            "depth_cap": 200,
+            "outcome": "T_win",
+            "proposed": [
+              284,
+              166,
+              3
+            ]
+          }
+        ]
+      },
+      "emission_seconds": 0.07874493501731195,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              208,
+              0
+            ],
+            [
+              354,
+              174,
+              3
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              312,
+              0
+            ],
+            [
+              354,
+              174,
+              3
+            ]
+          ],
+          "post": [
+            [
+              216,
+              160,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              208,
+              0
+            ],
+            [
+              354,
+              174,
+              3
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              160,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              266,
+              211,
+              1
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              284,
+              166,
+              3
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              284,
+              166,
+              3
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              160,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              266,
+              211,
+              1
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              284,
+              166,
+              3
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              270,
+              212,
+              1
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              160,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              266,
+              211,
+              1
+            ],
+            [
+              270,
+              108,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 6,
+        "options": 67,
+        "seconds": 0.08276321101584472,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 14,
+        "templates": 53
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/overlapping_6-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [
+        [
+          284,
+          166,
+          3
+        ]
+      ],
+      "optimization_seconds": 6.47903719698661,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "overlapping_6:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:2",
+                "mask": 3,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:3",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:4",
+                "mask": 5,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "overlapping_6:term:5",
+                "mask": 6,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "overlapping_6",
+        "metadata": {},
+        "qubit_count": 3,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 366,
+          "emitted": [
+            228,
+            112,
+            4
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            228,
+            112,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            216,
+            160,
+            4
+          ],
+          "post": [
+            216,
+            160,
+            4
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              24
+            ],
+            [
+              44
+            ]
+          ]
+        },
+        {
+          "cliffords": 450,
+          "emitted": [
+            270,
+            108,
+            4
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            270,
+            108,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            266,
+            157,
+            4
+          ],
+          "post": [
+            266,
+            157,
+            4
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              43
+            ]
+          ]
+        },
+        {
+          "cliffords": 444,
+          "emitted": [
+            270,
+            212,
+            1
+          ],
+          "families": [
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p2",
+          "model": [
+            270,
+            212,
+            1
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            266,
+            211,
+            1
+          ],
+          "post": [
+            266,
+            211,
+            1
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              25
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ]
+        },
+        {
+          "cliffords": 466,
+          "emitted": [
+            284,
+            166,
+            3
+          ],
+          "families": [
+            "proposed"
+          ],
+          "id": "p3",
+          "model": [
+            284,
+            166,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            278,
+            218,
+            3
+          ],
+          "post": [
+            278,
+            218,
+            3
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              25
+            ],
+            [
+              2
+            ],
+            [
+              23
+            ]
+          ]
+        },
+        {
+          "cliffords": 534,
+          "emitted": [
+            312,
+            156,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p4",
+          "model": [
+            312,
+            156,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            208,
+            0
+          ],
+          "post": [
+            312,
+            208,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              5
+            ],
+            [
+              1,
+              4
+            ],
+            [
+              2,
+              3
+            ]
+          ]
+        },
+        {
+          "cliffords": 534,
+          "emitted": [
+            312,
+            208,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p5",
+          "model": [
+            312,
+            312,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            208,
+            0
+          ],
+          "post": [
+            312,
+            208,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ]
+        },
+        {
+          "cliffords": 600,
+          "emitted": [
+            354,
+            174,
+            3
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p6",
+          "model": [
+            354,
+            174,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            344,
+            229,
+            3
+          ],
+          "post": [
+            344,
+            229,
+            3
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              7
+            ],
+            [
+              18
+            ],
+            [
+              23
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 133,
+        "depth_max": null,
+        "labels_considered": 256,
+        "peak_labels_per_state": 5,
+        "seconds": 0.0009244749962817878,
+        "states": 33,
+        "waves": 208
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "qedc_mc_004_003_000-circuits.json.gz": "67bb0ddb694fd7b54def9dc8f1bfbec56c34ee81f33033777a5a68659d42d52a",
+        "qedc_mc_004_003_000-library.json.gz": "bc570ba064ab60de2e008b09c7a3c0f3b787b69cf3fe8daf963bd81508ab1c9d"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 143,
+      "baseline_seconds": 0.0061705129919573665,
+      "case": "qedc_mc_004_003_000",
+      "circuit_artifact": "results/raw/hwp-pareto-study/qedc_mc_004_003_000-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 24,
+          "both_infeasible": 39
+        },
+        "model": {
+          "T_tie": 24,
+          "both_infeasible": 39
+        },
+        "post": {
+          "T_tie": 24,
+          "both_infeasible": 39
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.054212664981605485,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              260,
+              0
+            ],
+            [
+              354,
+              174,
+              3
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              312,
+              0
+            ],
+            [
+              354,
+              174,
+              3
+            ]
+          ],
+          "post": [
+            [
+              216,
+              206,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              158,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              206,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              206,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "model": [
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ],
+          "post": [
+            [
+              216,
+              206,
+              4
+            ],
+            [
+              228,
+              112,
+              4
+            ],
+            [
+              312,
+              156,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 6,
+        "options": 63,
+        "seconds": 0.0736048300168477,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 17,
+        "templates": 46
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/qedc_mc_004_003_000-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 4.750247405027039,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "theta",
+            "value": "0.173"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "qedc_mc_004_003_000:block:0",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:0",
+                "mask": 3,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:1",
+                "mask": 9,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:2",
+                "mask": 5,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:3",
+                "mask": 6,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:4",
+                "mask": 10,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "theta",
+                "coefficient": 1,
+                "id": "qedc_mc_004_003_000:term:5",
+                "mask": 12,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "qedc_mc_004_003_000",
+        "metadata": {
+          "complete_workload": true,
+          "dataset_key": "qedcbench/maxcut/_common/instances/mc_004_003_000.txt",
+          "edges": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "license": "Apache-2.0",
+          "license_url": "https://github.com/sri-international/qc-app-oriented-benchmarks/blob/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/LICENSE",
+          "loader": "maxcut_edgelist",
+          "phase_convention": "P(theta) on x_u XOR x_v",
+          "problem": "unweighted_maxcut",
+          "source_hash": "28b8c06d893be9a6f5cff7524efde38749861cce15fa281b8a346a091ae9d658",
+          "source_revision": "feb22a900d9d94d40e81bc1d25e149bd8f3cbc18",
+          "source_url": "https://raw.githubusercontent.com/sri-international/qc-app-oriented-benchmarks/feb22a900d9d94d40e81bc1d25e149bd8f3cbc18/qedcbench/maxcut/_common/instances/mc_004_003_000.txt",
+          "stratum": "public_development"
+        },
+        "qubit_count": 4,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 372,
+          "emitted": [
+            228,
+            112,
+            4
+          ],
+          "families": [
+            "base_hwp",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            228,
+            112,
+            4
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            216,
+            206,
+            4
+          ],
+          "post": [
+            216,
+            206,
+            4
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              21
+            ],
+            [
+              40
+            ]
+          ]
+        },
+        {
+          "cliffords": 540,
+          "emitted": [
+            312,
+            156,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p1",
+          "model": [
+            312,
+            156,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            210,
+            0
+          ],
+          "post": [
+            312,
+            210,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              5
+            ],
+            [
+              1,
+              4
+            ],
+            [
+              2,
+              3
+            ]
+          ]
+        },
+        {
+          "cliffords": 540,
+          "emitted": [
+            312,
+            260,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p2",
+          "model": [
+            312,
+            312,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            312,
+            158,
+            0
+          ],
+          "post": [
+            312,
+            158,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ]
+        },
+        {
+          "cliffords": 606,
+          "emitted": [
+            354,
+            174,
+            3
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p3",
+          "model": [
+            354,
+            174,
+            3
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            344,
+            233,
+            3
+          ],
+          "post": [
+            344,
+            233,
+            3
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              6
+            ],
+            [
+              15
+            ],
+            [
+              20
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 120,
+        "depth_max": null,
+        "labels_considered": 234,
+        "peak_labels_per_state": 4,
+        "seconds": 0.0007803250045981258,
+        "states": 33,
+        "waves": 165
+      },
+      "solver_status": "OPTIMAL"
+    },
+    {
+      "artifact_sha256": {
+        "distinct_angles_4-circuits.json.gz": "cfe60b09e6f505c61949c867d1b65df1a3f7773ca5593ab2a097498a14f3aef7",
+        "distinct_angles_4-library.json.gz": "bf3514e6f2ac1243b06eaa8fd7d84eb06d11821dfc8d0aa71b715b0627068a49"
+      },
+      "baseline_complete": true,
+      "baseline_partitions": 1,
+      "baseline_seconds": 0.003848421009024605,
+      "case": "distinct_angles_4",
+      "circuit_artifact": "results/raw/hwp-pareto-study/distinct_angles_4-circuits.json.gz",
+      "comparison_counts": {
+        "emitted": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "model": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        },
+        "post": {
+          "T_tie": 49,
+          "both_infeasible": 14
+        }
+      },
+      "constrained_differences": {
+        "emitted": [],
+        "model": [],
+        "post": []
+      },
+      "emission_seconds": 0.01311687400448136,
+      "family_points": {
+        "base_hwp": {
+          "emitted": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              194,
+              194,
+              0
+            ]
+          ],
+          "post": [
+            [
+              194,
+              50,
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "emitted": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              194,
+              50,
+              0
+            ]
+          ]
+        },
+        "per_group": {
+          "emitted": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              194,
+              50,
+              0
+            ]
+          ]
+        },
+        "proposed": {
+          "emitted": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              194,
+              50,
+              0
+            ]
+          ]
+        },
+        "uniform": {
+          "emitted": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "model": [
+            [
+              194,
+              50,
+              0
+            ]
+          ],
+          "post": [
+            [
+              194,
+              50,
+              0
+            ]
+          ]
+        }
+      },
+      "library": {
+        "normalized_terms": 4,
+        "options": 4,
+        "seconds": 0.002148961997590959,
+        "subset_coverage": "all nonempty compatible subsets up to max_batch",
+        "template_hits": 0,
+        "templates": 4
+      },
+      "library_artifact": "results/raw/hwp-pareto-study/distinct_angles_4-library.json.gz",
+      "model_complete": true,
+      "new_model_points": [],
+      "optimization_seconds": 0.3861163459951058,
+      "peak_process_rss_kib": 399884,
+      "program": {
+        "angles": [
+          {
+            "id": "a0",
+            "value": "0.173"
+          },
+          {
+            "id": "a1",
+            "value": "0.291"
+          },
+          {
+            "id": "a2",
+            "value": "0.419"
+          },
+          {
+            "id": "a3",
+            "value": "0.537"
+          }
+        ],
+        "blocks": [
+          {
+            "boundary": "diagonal",
+            "id": "block",
+            "metadata": {},
+            "terms": [
+              {
+                "angle_id": "a0",
+                "coefficient": 1,
+                "id": "t0",
+                "mask": 1,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a1",
+                "coefficient": 1,
+                "id": "t1",
+                "mask": 2,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a2",
+                "coefficient": 1,
+                "id": "t2",
+                "mask": 4,
+                "metadata": {},
+                "offset": false
+              },
+              {
+                "angle_id": "a3",
+                "coefficient": 1,
+                "id": "t3",
+                "mask": 8,
+                "metadata": {},
+                "offset": false
+              }
+            ]
+          }
+        ],
+        "id": "distinct_angles_4",
+        "metadata": {},
+        "qubit_count": 4,
+        "qubit_order": "little_endian_mask_bit_i_is_qubit_i",
+        "schema_version": 1
+      },
+      "records": [
+        {
+          "cliffords": 298,
+          "emitted": [
+            194,
+            50,
+            0
+          ],
+          "families": [
+            "direct",
+            "per_group",
+            "proposed",
+            "uniform"
+          ],
+          "id": "p0",
+          "model": [
+            194,
+            50,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            194,
+            50,
+            0
+          ],
+          "post": [
+            194,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0,
+              1,
+              2,
+              3
+            ]
+          ]
+        },
+        {
+          "cliffords": 298,
+          "emitted": [
+            194,
+            50,
+            0
+          ],
+          "families": [
+            "base_hwp"
+          ],
+          "id": "p1",
+          "model": [
+            194,
+            194,
+            0
+          ],
+          "optimization_status": "verified",
+          "optimized": [
+            194,
+            50,
+            0
+          ],
+          "post": [
+            194,
+            50,
+            0
+          ],
+          "post_verification": "verified_lowered_external_dense",
+          "verification": "verified_lowered_dense",
+          "waves": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ]
+        }
+      ],
+      "search": {
+        "ancilla_max": 8,
+        "cache_hits": 13,
+        "depth_max": null,
+        "labels_considered": 21,
+        "peak_labels_per_state": 1,
+        "seconds": 0.00011742798960767686,
+        "states": 9,
+        "waves": 21
+      },
+      "solver_status": "OPTIMAL"
+    }
+  ],
+  "config_sha256": "17c65715367b79b50f18a47c188df384bcfa8628c884f9411c4b910e938da861",
+  "revision": "febb7bd6669bdcce506f6878549877ca6b6b8059",
+  "run_date": "2026-09-17T08:37:40.560992+00:00",
+  "source_fingerprint": "c3c3b0d482b0bb474fac66c692028e106f22e755f75049c4d6a7b3c16bcec71b",
+  "source_hashes": {
+    "data/manifests/refocus-study.yaml": "10b8cadc0ab9971d08ff2b1d29fea3f75719ddf7fa76601344fa67d72501404e",
+    "pyproject.toml": "f388a48d2b21abf1b77f47c7c5ce199fc4043604552a5a391deda0d612c200b8",
+    "scripts/run_hwp_pareto.py": "af35e589a19cbe7dc2e23ed434fcf958b9d26c660248c5f68f030fad9b9e18d4",
+    "src/collective_phase/__init__.py": "298e6712966840c219c91bacfddb42870eb3deb5bcefcc7f945a58cff7a4ecfa",
+    "src/collective_phase/__main__.py": "76fa916e93e0ae1a6c1bb51dcc0bcf289c014e9f760a47165f8a84401ccf41d7",
+    "src/collective_phase/adapters/__init__.py": "0dea585f0db7143f095a8c31b286b6fff85a159d0f80389c3c29c911d989e4c7",
+    "src/collective_phase/adapters/_pyzx_circuit.py": "626d69662ccd29bfac856b418afab9cfb739b8c67b3223be3c472d912406ab45",
+    "src/collective_phase/adapters/common.py": "2187d24db3df13beb2361f940cd8106aa14eaf672837a004e8800626af04d635",
+    "src/collective_phase/adapters/feynman.py": "5ce15078c4a1ddddab098094d5aebebdd832294064c11af5622a6197c9bbd883",
+    "src/collective_phase/adapters/phase_ancilla.py": "605dd3f24929090074dbd430c5a140788213ff6802663739be848d8ba7e477ba",
+    "src/collective_phase/adapters/pyzx.py": "2cc8be53074ab8cfb62cf542830374dc6fbf7f62bd25eebf7690ecda219b4535",
+    "src/collective_phase/baselines/__init__.py": "1b6aca4b7d774a2a90329021c24c0b2d320f580310e276b852150ff6279350ff",
+    "src/collective_phase/baselines/arithmetic.py": "0d12a41844caead0208101ec102053d917db14e8e36ec0e97622c3e3364f204f",
+    "src/collective_phase/baselines/common.py": "22e209a67b337d732b19249906d6d76a3ed84a86dacbccb3bffe11a5e953570e",
+    "src/collective_phase/baselines/hwp.py": "2613c339fe9788fbd3060b36d844973099c6fb774d2e5338fa86dad459efc0d5",
+    "src/collective_phase/baselines/independent.py": "5a618c5c9e1cc67c4e395013b3ddc5df6c3f3aa14b3f1fa4dc7ff2bfc06ceab9",
+    "src/collective_phase/baselines/shared_parity.py": "f42d93076fed43050d60b59543cd8018219eb68cacbe87cf98066eb59b4e8bb1",
+    "src/collective_phase/circuit.py": "ba129d72a5b738421ffb881032a001e70b695dd059b642899eb76b8238d88328",
+    "src/collective_phase/cli.py": "feccedd00c717590f1c04796e2e2d517c867bcb60535995b09d330bb81301673",
+    "src/collective_phase/experiments.py": "5db3c6afc0ba7f33a5e748e05ba65e06d89e39d07eddc4fd4fec8a02fc2069ef",
+    "src/collective_phase/hwp_pareto.py": "89ecb2b700e6b0a38c97f80f383b517055458aeaf55f1d0b91352d6354dd23b5",
+    "src/collective_phase/inputs/__init__.py": "71e6f1f173de901754c34a2de787db855dfdd95ec984e4c268b84abab3e73288",
+    "src/collective_phase/inputs/manifest.py": "0629c354cc9abc6c26d442628218c1862b86d3ca49ee69062a5a950efd84fc0b",
+    "src/collective_phase/ir.py": "a4ad41baa4a3d11557956f65b0cb395cf5a2071d2f6e0897963310dd433b1219",
+    "src/collective_phase/lowering/__init__.py": "c549fa3309f0b39c0d9c06c4a2918064c6b810a69f423813729833cd7fc59e66",
+    "src/collective_phase/lowering/lower.py": "c5cd50102317d8ad8ab80513a5f296f95803fe94ba697264c60612d743783efe",
+    "src/collective_phase/lowering/primitives.py": "9d4079634f24bb2f53de2b7811f103b8fc471b3f2b4fd52c0cce0b5bd374fa6c",
+    "src/collective_phase/lowering/synthesis.py": "e1dc48762f90392ae2cfbd50aee1d1d8c0d9cb3cf37bf2abbc852e0ca31d1b17",
+    "src/collective_phase/preprocessing.py": "42b370fab7663288eaaec3b260243889089d755402a81877f8d5d6dc1a0d631b",
+    "src/collective_phase/profiles.py": "7cf90e06c09dc74ee851b2441f0cc4cb670355dd289aec058c049d34746a0ee3",
+    "src/collective_phase/reporting.py": "33916041352a302609516756252ecf934f41d2e926bc7f0d01d3f1b505d5ac79",
+    "src/collective_phase/resources.py": "33d93291a05d986b5559162281a3c85e3f46948a6ee600c435f3e1323a5127cb",
+    "src/collective_phase/search.py": "799a59f3ce2c4554634ec57f99984ec4f62e95c91c51e2aad753f947587a3102",
+    "src/collective_phase/selection.py": "9f889c532e582766418dfb420cb373a429294a00858fcf834a2523c7bc0a36dc",
+    "src/collective_phase/verification/__init__.py": "a8fb474da9d19616a966c273c56e8527451e0165767bae52ca8de6d644358a4c",
+    "src/collective_phase/verification/core.py": "0feb4ad3dce8751a0623fdce6d41de2ee2caa899de5d4145e12b75d9ccbf2098",
+    "src/collective_phase/verification/lowered.py": "7fee07e4622c932dae8731b7346fa06709c100293ae5c382b6c1880173542f33"
+  },
+  "versions": {
+    "PyYAML": "6.0.2",
+    "numpy": "2.5.3",
+    "pygridsynth": "2.0.0",
+    "pyzx": "0.9.0"
+  },
+  "warm_rotation_cache": true
+}
