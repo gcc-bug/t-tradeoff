@@ -34,3 +34,20 @@ python scripts/run_hwp_guided_search.py
 
 See `reports/hwp-guided-diagnosis.md` and `results/hwp-guided-diagnosis.json`.
 The complete supplied plan is preserved in `docs/hwp-guided-search-test-plan.md`.
+
+The search shares the original canonical wave generator, extracted without changing
+its transitions or within-cover Pareto pruning. The only other change to the
+original library records its synthesis seed for the guarantee fingerprint. The
+base source fingerprint check reads the pinned commit; current model fingerprints
+include current source files, input, emitted templates and synthesis versions,
+precision, batch cap, wave rules, scratch semantics, and the exact hard limits.
+
+Structural bounds use exact fractions. Archived inequalities retain their source
+search result, validate matching constraints and coefficients, and use the best
+nonnegative single-certificate scaling. No approximate LP is used. Certificates
+are trusted local search outputs, not a parser for arbitrary external claims.
+Models are frozen contexts; do not mutate their libraries after construction.
+A verification failure raises an error and produces no optimum/infeasibility claim.
+`FEASIBLE` with reason `TIMEOUT` retains an incumbent and certified lower bound;
+`TIMEOUT` without an incumbent is distinct from `INFEASIBLE`. Zero lower bounds
+have no percentage gap, while zero-cost equality still proves optimality.

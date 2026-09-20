@@ -30,7 +30,9 @@ def best(plans, weights, limits):
 
 def diagnosis(config, config_path):
     previous = json.loads((ROOT / 'results/hwp-pareto-study.json').read_text())
-    mismatches = [p for p, h in previous['source_hashes'].items() if sha(ROOT / p) != h]
+    mismatches = [p for p, h in previous['source_hashes'].items()
+                  if __import__('hashlib').sha256(subprocess.check_output(
+                      ['git', 'show', f"{config['base_revision']}:{p}"], cwd=ROOT)).hexdigest() != h]
     if mismatches:
         raise ValueError(f'original study source changed: {mismatches}')
     cases = yaml.safe_load((ROOT / config['development_config']).read_text())['cases'] + config['additional_cases']

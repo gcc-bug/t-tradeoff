@@ -148,7 +148,7 @@ def build_library(program: PhaseProgram, total_error: float,
     return Library(program, normalized.terms, groups, tuple(options), total_error, max_batch,
                    {"seconds": time.perf_counter() - started, "options": len(options),
                     "templates": len(templates), "template_hits": hits,
-                    "normalized_terms": len(normalized.terms),
+                    "normalized_terms": len(normalized.terms), "synthesis_seed": synthesizer.seed,
                     "subset_coverage": "all nonempty compatible subsets up to max_batch"})
 
 
@@ -184,6 +184,33 @@ def _validate_limits(ancilla_max: int, depth_max: int | None) -> None:
         raise ValueError("depth cap must be a nonnegative integer")
 
 
+def canonical_waves(options, by_term, remaining, ancilla_max, check_time, stats):
+    anchor = (remaining & -remaining).bit_length() - 1
+    boundary = min(o.boundary for o in by_term[anchor]) if by_term[anchor] else -1
+    eligible = [o for o in options if o.terms & remaining == o.terms and o.boundary == boundary]
+    # Distinct covers may have different continuations. Only prune within cover.
+    by_cover: dict[int, list[Plan]] = {}
+    def extend(chosen, cover, footprint, resources, first):
+        check_time()
+        stats["waves"] += 1
+        by_cover.setdefault(cover, []).append(Plan(resources, (tuple(sorted(chosen)),)))
+        for index in range(first, len(eligible)):
+            opt = eligible[index]
+            if opt.terms & cover or opt.footprint & footprint:
+                continue
+            t, d, a = opt.resources
+            if resources[2] + a > ancilla_max:
+                continue
+            extend((*chosen, opt.id), cover | opt.terms, footprint | opt.footprint,
+                   (resources[0] + t, max(resources[1], d), resources[2] + a), index + 1)
+    for opt in by_term[anchor]:
+        if opt.terms & remaining == opt.terms:
+            extend((opt.id,), opt.terms, opt.footprint, opt.resources, 0)
+    for cover, plans in by_cover.items():
+        for plan in pareto(plans):
+            yield cover, plan
+
+
 def frontier(library: Library, ancilla_max: int, depth_max: int | None = None, *,
              timeout_seconds: float = 60, option_ids: frozenset[int] | None = None) -> FrontierResult:
     """Exact subset DP; a timeout returns only complete feasible incumbents.
@@ -215,31 +242,6 @@ def frontier(library: Library, ancilla_max: int, depth_max: int | None = None, *
         if time.perf_counter() >= deadline:
             raise _Deadline
 
-    def waves(remaining: int):
-        anchor = (remaining & -remaining).bit_length() - 1
-        boundary = min(o.boundary for o in by_term[anchor]) if by_term[anchor] else -1
-        eligible = [o for o in options if o.terms & remaining == o.terms and o.boundary == boundary]
-        # Distinct covers may have different continuations. Only prune within cover.
-        by_cover: dict[int, list[Plan]] = {}
-        def extend(chosen, cover, footprint, resources, first):
-            check_time()
-            stats["waves"] += 1
-            by_cover.setdefault(cover, []).append(Plan(resources, (tuple(sorted(chosen)),)))
-            for index in range(first, len(eligible)):
-                opt = eligible[index]
-                if opt.terms & cover or opt.footprint & footprint:
-                    continue
-                t, d, a = opt.resources
-                if resources[2] + a > ancilla_max:
-                    continue
-                extend((*chosen, opt.id), cover | opt.terms, footprint | opt.footprint,
-                       (resources[0] + t, max(resources[1], d), resources[2] + a), index + 1)
-        for opt in by_term[anchor]:
-            if opt.terms & remaining == opt.terms:
-                extend((opt.id,), opt.terms, opt.footprint, opt.resources, 0)
-        for cover, plans in by_cover.items():
-            for plan in pareto(plans):
-                yield cover, plan
 
     @lru_cache(None)
     def visit(remaining: int) -> tuple[Plan, ...]:
@@ -248,7 +250,7 @@ def frontier(library: Library, ancilla_max: int, depth_max: int | None = None, *
         if remaining == 0:
             return (Plan((0, 0, 0)),)
         labels: list[Plan] = []
-        for cover, wave in waves(remaining):
+        for cover, wave in canonical_waves(options, by_term, remaining, ancilla_max, check_time, stats):
             for tail in visit(remaining ^ cover):
                 stats["labels_considered"] += 1
                 t, d, a = wave.resources
