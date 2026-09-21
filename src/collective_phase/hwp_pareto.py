@@ -38,12 +38,13 @@ class BlockOption:
     resources: Resources
     lowered: LoweredCircuit = field(compare=False, repr=False)
     allowance: float
+    ordering: str = "staged"
 
     def summary(self) -> dict:
         return {"id": self.id, "terms": self.terms, "group": self.group,
                 "boundary": self.boundary, "footprint": self.footprint,
                 "data_wires": self.data_wires, "layout": self.layout,
-                "resources": self.resources, "allowance": self.allowance,
+                "resources": self.resources, "allowance": self.allowance, "ordering": self.ordering,
                 "error_bound": self.lowered.error_bound}
 
 
@@ -85,14 +86,23 @@ def pareto(plans) -> list[Plan]:
     return front
 
 
+def template_layouts(local_masks, coefficient):
+    """Applicability for canonical, compact-wire normalized templates."""
+    native = coefficient == 1 and all(mask.bit_count() == 1 for mask in local_masks)
+    return (("direct",) if len(local_masks) == 1 else
+            ("in_place_inputs", "copied_parities") if native else ("copied_parities",))
+
+
 def build_library(program: PhaseProgram, total_error: float,
                   synthesizer: RotationSynthesizer, *, max_batch: int = 10,
-                  max_terms: int = 10) -> Library:
+                  max_terms: int = 10, orderings=("staged",)) -> Library:
     started = time.perf_counter()
     if not math.isfinite(total_error) or not 0 < total_error < 1:
         raise ValueError("total_error must lie in (0, 1)")
     if max_batch < 1 or max_terms < 1:
         raise ValueError("positive size limits required")
+    if not orderings or any(o not in {"staged", "readiness"} for o in orderings):
+        raise ValueError("invalid arithmetic orderings")
     normalized = preprocess(program)
     if len(normalized.terms) > max_terms or program.qubit_count > 10:
         raise ValueError("instance exceeds the declared exact-search/verification cap")
@@ -113,15 +123,13 @@ def build_library(program: PhaseProgram, total_error: float,
                 wires = tuple(data_support(footprint))
                 local_masks = tuple(sum(((t.mask >> q) & 1) << i for i, q in enumerate(wires))
                                     for t in subset)
-                native = (group.coefficient == 1 and
-                          all(mask.bit_count() == 1 for mask in local_masks))
-                layouts = ("direct",) if size == 1 else (
-                    ("in_place_inputs", "copied_parities") if native else ("copied_parities",))
+                layouts = template_layouts(local_masks, group.coefficient)
                 allowance = total_error * size / max(1, len(normalized.terms))
-                for layout in layouts:
+                for layout, ordering in ((layout, order) for layout in layouts
+                                         for order in (("staged",) if layout == "direct" else orderings)):
                     # Compact-wire templates retain predicate structure; no unproved
                     # permutation equivalence is used for overlapping parities.
-                    key = (local_masks, group.angle_id, group.coefficient, layout, allowance)
+                    key = (local_masks, group.angle_id, group.coefficient, layout, allowance, ordering)
                     if key not in templates:
                         local = PhaseProgram(
                             "hwp-template", len(wires), program.angles,
@@ -131,7 +139,7 @@ def build_library(program: PhaseProgram, total_error: float,
                                                              hwp_search_cap=max_batch)
                         candidate = (compile_independent(local, constraints) if layout == "direct"
                                      else compile_hwp_adder_unitary(local, constraints,
-                                                                  batch_limit=size, layout=layout))
+                                                                  batch_limit=size, layout=layout, ordering=ordering))
                         lowered = lower_candidate(candidate, allowance, synthesizer)
                         proof = verify_lowered_circuit(lowered, allowance, memory_cap_bytes=1)
                         if not proof.status.startswith("verified_lowered_"):
@@ -144,7 +152,7 @@ def build_library(program: PhaseProgram, total_error: float,
                     options.append(BlockOption(
                         len(options), sum(1 << indices[t.id] for t in subset), group_id,
                         boundaries[group.block_id], footprint, wires, layout,
-                        (r.t_count, r.t_depth, r.peak_workspace), lowered, allowance))
+                        (r.t_count, r.t_depth, r.peak_workspace), lowered, allowance, ordering))
     return Library(program, normalized.terms, groups, tuple(options), total_error, max_batch,
                    {"seconds": time.perf_counter() - started, "options": len(options),
                     "templates": len(templates), "template_hits": hits,
@@ -281,7 +289,7 @@ def solve(library: Library, ancilla_max: int, depth_max: int, **kwargs) -> dict:
     return frontier(library, ancilla_max, depth_max, **kwargs).solve(ancilla_max, depth_max)
 
 
-def emit(library: Library, plan: Plan, *, memory_cap_bytes: int = 1) -> tuple[LoweredCircuit, dict]:
+def emit(library: Library, plan: Plan, *, memory_cap_bytes: int = 1, timings: dict | None = None) -> tuple[LoweredCircuit, dict]:
     """Reuse clean scratch between waves; rebuild gates from persisted rotations."""
     n = library.program.qubit_count
     operations, rotations, error_blocks, wave_trace = [], [], [], []
@@ -332,8 +340,14 @@ def emit(library: Library, plan: Plan, *, memory_cap_bytes: int = 1) -> tuple[Lo
                                       "wave_schedule": wave_trace},
                           implementation_family="unitary_hwp_wave_plan", variant="pareto",
                           preprocessing_version="canonical-v2")
+    lowering_started = time.perf_counter()
     lowered = lower_candidate_with_rotations(candidate, library.total_error, rotations, [])
+    if timings is not None:
+        timings["lowering_seconds"] = time.perf_counter() - lowering_started
+    verification_started = time.perf_counter()
     proof = verify_lowered_circuit(lowered, library.total_error, memory_cap_bytes=memory_cap_bytes)
+    if timings is not None:
+        timings["verification_seconds"] = time.perf_counter() - verification_started
     if not proof.status.startswith("verified_lowered_"):
         raise ValueError(f"composed circuit failed verification: {proof.message}")
     r = estimate_resources(lowered)
@@ -366,7 +380,9 @@ def baseline_frontiers(library: Library, ancilla_max: int, *, timeout_seconds: f
     stronger than fixed contiguous batching or forcing unprofitable remainders.
     """
     started = time.perf_counter()
-    options = {(o.terms, o.layout): o.id for o in library.options}
+    options = {}
+    for o in library.options:
+        options.setdefault((o.terms, o.layout), []).append(o.id)
     partition_cache: dict[tuple[int, ...], list[Plan]] = {}
     output = {"direct": [], "uniform": [], "per_group": []}
     complete = True
@@ -392,10 +408,10 @@ def baseline_frontiers(library: Library, ancilla_max: int, *, timeout_seconds: f
                         # HWP arithmetic merely because a cap was selected.
                         alternatives = []
                         for mask, kind in keys:
-                            direct = tuple(options[1 << i, "direct"] for i in group if mask & (1 << i))
+                            direct = tuple(options[1 << i, "direct"][0] for i in group if mask & (1 << i))
                             variants = {direct}
                             if (mask, kind) in options:
-                                variants.add((options[mask, kind],))
+                                variants.update((i,) for i in options[mask, kind])
                             alternatives.append(sorted(variants))
                         for selected in product(*alternatives):
                             choices.add((cap, tuple(sorted(i for batch in selected for i in batch))))

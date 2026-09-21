@@ -59,12 +59,13 @@ def test_adder_compressor_primitive_truth_tables():
         assert bits[1] + 2 * bits[2] == sum(original[:2])
 
 
-@pytest.mark.parametrize("size", range(1, 9))
-def test_adder_hamming_weight_and_inverse_for_all_inputs(size):
+@pytest.mark.parametrize("ordering", ["staged", "readiness"])
+@pytest.mark.parametrize("size", range(1, 11))
+def test_adder_hamming_weight_and_inverse_for_all_inputs(size, ordering):
     carry_count = hwp_compressor_count(size)
     inputs = tuple(range(size))
     carries = tuple(range(size, size + carry_count))
-    operations, layout = hamming_weight_compute(inputs, carries)
+    operations, layout = hamming_weight_compute(inputs, carries, ordering=ordering)
     assert sum(operation.kind == "toffoli" for operation in operations) == carry_count
     for value in range(1 << size):
         bits = [(value >> index) & 1 for index in range(size)] + [0] * carry_count

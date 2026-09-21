@@ -290,3 +290,212 @@ def search(model: Model, coefficients, ancilla_max, depth_max=None, *, seeds=(),
     stats.update(seconds=elapsed, search_seconds=elapsed-stats['verification_seconds'],
                  queue_size=len(queue), bounds_cached=bounds.cache_info().currsize)
     return SearchResult(status, reason, incumbent, lower, upper, w, fp, stats)
+
+
+def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
+                    timeout_seconds=60, tolerance='0', partial_pruning=True,
+                    resolve_upfront=False, clock=time.perf_counter,
+                    checkpoint=lambda stage: None):
+    """Lazy refinement with streaming waves and certified pending-family bounds.
+
+    Queue keys may lag shared refinements, which only makes them weaker. Prefix
+    dominance is used only after every selected primitive is resolved. The active
+    parent stays pending through refinement, generation, and finalist verification.
+    ``checkpoint`` permits deterministic interruption tests (raise _Deadline).
+    """
+    from types import SimpleNamespace
+
+    started = clock()
+    _validate_limits(ancilla_max, depth_max)
+    if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
+        raise ValueError('timeout must be finite and nonnegative')
+    w, eta = weights(coefficients), rational(tolerance)
+    if eta < 0:
+        raise ValueError('negative tolerance')
+    fp = library.fingerprint(ancilla_max, depth_max)
+    options = tuple(o for o in library.options if o.workspace <= ancilla_max)
+    by_term = {i: tuple(o for o in options if o.terms & (1 << i))
+               for i in range(len(library.terms))}
+    stats = dict(states=0, waves=0, partial_waves=0, partial_pruned=0,
+                 bound_pruned=0, dominated=0, queue_peak=1, label_peak=0,
+                 first_incumbent_seconds=None, gap_5_percent_seconds=None,
+                 gap_1_percent_seconds=None, pending_expansion_at_timeout=False,
+                 partial_pruning=partial_pruning, resolve_upfront=resolve_upfront)
+    queue, serial, labels, cache = [], 0, {}, {}
+    pending, incumbent, upper = Fraction(0), None, None
+    reason = 'EXHAUSTED'
+    counts = {}
+    for o in options:
+        for r in o.requests:
+            counts[r.key] = counts.get(r.key, 0) + 1
+
+    def check(stage):
+        checkpoint(stage)
+        if clock() >= started + timeout_seconds:
+            raise _Deadline
+
+    def feasible(r):
+        return r[2] <= ancilla_max and (depth_max is None or r[1] <= depth_max)
+
+    def tail_bound(remaining):
+        key = library.epoch, remaining
+        if key not in cache:
+            check('bounds')
+            views = [SimpleNamespace(terms=o.terms, resources=library.evaluate(o).lower)
+                     for o in options if o.terms & remaining == o.terms]
+            cache[key] = completion_bounds(library, remaining, views)
+        return cache[key]
+
+    def bound_for(remaining, r):
+        tail = tail_bound(remaining)
+        if tail is None:
+            return None
+        resources = (r[0]+tail[0], r[1]+tail[1], max(r[2], tail[2]))
+        return cost(resources, w) if feasible(resources) else None
+
+    def push(bound, remaining, waves):
+        nonlocal serial
+        serial += 1
+        heapq.heappush(queue, (bound, serial, remaining, waves))
+        stats['queue_peak'] = max(stats['queue_peak'], len(queue))
+
+    def accept(waves):
+        nonlocal incumbent, upper
+        r = library.plan_resources(waves)
+        if not feasible(r) or (upper is not None and cost(r, w) >= upper):
+            return
+        check('before_emission')
+        plan = Plan(r, waves)
+        lowered, proof = library.emit(plan, check_time=lambda: check('materialization'))
+        incumbent, upper = plan, cost(r, w)
+        stats['incumbent_emitted'] = estimate_resources(lowered).to_dict()
+        stats['incumbent_verification'] = proof
+        stats['incumbent_prediction'] = r
+        if stats['first_incumbent_seconds'] is None:
+            stats['first_incumbent_seconds'] = clock()-started
+
+    def wave_generator(remaining, prefix):
+        anchor = (remaining & -remaining).bit_length()-1
+        boundary = min((o.boundary for o in by_term[anchor]), default=-1)
+        eligible = [o for o in options if o.terms & remaining == o.terms and o.boundary == boundary]
+
+        def extend(chosen, cover, footprint, r, first):
+            check('partial_wave')
+            stats['partial_waves'] += 1
+            if partial_pruning:
+                tail = tail_bound(remaining ^ cover)
+                if tail is None:
+                    stats['partial_pruned'] += 1
+                    return
+                # Remaining terms may JOIN this wave: use max, never sum, for D.
+                relaxed = (prefix[0]+r[0]+tail[0], prefix[1]+max(r[1], tail[1]),
+                           max(prefix[2], r[2], tail[2]))
+                if not feasible(relaxed) or (upper is not None and cost(relaxed, w) >= upper):
+                    stats['partial_pruned'] += 1
+                    return
+            stats['waves'] += 1
+            yield cover, tuple(sorted(chosen))
+            for j in range(first, len(eligible)):
+                check('partial_wave_scan')
+                o = eligible[j]
+                if o.terms & cover or o.footprint & footprint or r[2]+o.workspace > ancilla_max:
+                    continue
+                t, d, a = library.evaluate(o).lower
+                yield from extend((*chosen, o.id), cover | o.terms, footprint | o.footprint,
+                                  (r[0]+t, max(r[1], d), r[2]+a), j+1)
+        for o in by_term[anchor]:
+            if o.terms & remaining == o.terms:
+                yield from extend((o.id,), o.terms, o.footprint, library.evaluate(o).lower, 0)
+
+    def global_lower():
+        values = ([queue[0][0]] if queue else []) + ([pending] if pending is not None else [])
+        if upper is not None:
+            values.append(upper)
+        return min(values) if values else None
+
+    try:
+        check('start')
+        # A cheap direct seed; independent predicates can share a wave. A depth
+        # violation rejects this seed only, not the construction family.
+        seed_waves = []
+        for i in range(len(library.terms)):
+            o = next((o for o in by_term[i] if o.terms == 1 << i), None)
+            if o is None:
+                break
+            library.resolve(o, lambda: check('refinement'))
+            for wave in seed_waves:
+                if all(library.options[j].boundary == o.boundary and
+                       not library.options[j].footprint & o.footprint for j in wave):
+                    wave.append(o.id)
+                    break
+            else:
+                seed_waves.append([o.id])
+        else:
+            accept(tuple(tuple(wave) for wave in seed_waves))
+        if resolve_upfront:
+            for o in options:
+                library.resolve(o, lambda: check('refinement'))
+        root = bound_for(library.full_mask, (0, 0, 0))
+        if root is not None:
+            push(root, library.full_mask, ())
+        pending = None
+        while queue:
+            lower = global_lower()
+            if upper is not None:
+                for percentage in (5, 1):
+                    key = f'gap_{percentage}_percent_seconds'
+                    if stats[key] is None and (upper == lower or
+                            lower > 0 and upper <= (1+Fraction(percentage, 100))*lower):
+                        stats[key] = clock()-started
+                if lower == upper or (eta > 0 and lower > 0 and upper <= (1+eta)*lower):
+                    reason = 'BOUND_CLOSED' if lower == upper else 'GAP_TOLERANCE'
+                    break
+            check('queue')
+            old_bound, _, remaining, waves = heapq.heappop(queue)
+            pending = old_bound
+            resources = library.plan_resources(waves)
+            bound = bound_for(remaining, resources)
+            if bound is None or (upper is not None and bound >= upper):
+                stats['bound_pruned'] += 1
+                pending = None
+                continue
+            bound = max(bound, old_bound)
+            requests = {r.key: r for wave in waves for i in wave
+                        for r in library.unresolved(library.options[i])}
+            if requests:
+                # Reuse ranking is heuristic; only proved lower bounds prune.
+                request = max(requests.values(), key=lambda r: (counts[r.key], r.key))
+                library.refine(request, lambda: check('refinement'))
+                refined = bound_for(remaining, library.plan_resources(waves))
+                if refined is not None:
+                    push(max(bound, refined), remaining, waves)
+                pending = None
+                continue
+            if not remaining:
+                accept(waves)
+                pending = None
+                continue
+            old = labels.setdefault(remaining, [])
+            if any(all(x <= y for x, y in zip(r, resources)) for r in old):
+                stats['dominated'] += 1
+                pending = None
+                continue
+            labels[remaining] = [r for r in old if not all(x <= y for x, y in zip(resources, r))] + [resources]
+            stats['label_peak'] = max(stats['label_peak'], sum(map(len, labels.values())))
+            stats['states'] += 1
+            for cover, wave in wave_generator(remaining, resources):
+                child_waves = waves + (wave,)
+                rest = remaining ^ cover
+                child_bound = bound_for(rest, library.plan_resources(child_waves))
+                if child_bound is not None and (upper is None or child_bound < upper):
+                    push(max(bound, child_bound), rest, child_waves)
+            pending = None
+    except _Deadline:
+        reason = 'TIMEOUT'
+        stats['pending_expansion_at_timeout'] = pending is not None
+    lower = global_lower()
+    status = ('OPTIMAL' if lower == upper else 'FEASIBLE') if upper is not None else (
+        'TIMEOUT' if reason == 'TIMEOUT' else 'INFEASIBLE')
+    stats.update(seconds=clock()-started, queue_size=len(queue), bounds_cached=len(cache),
+                 symbolic=dict(library.stats))
+    return SearchResult(status, reason, incumbent, lower, upper, w, fp, stats)

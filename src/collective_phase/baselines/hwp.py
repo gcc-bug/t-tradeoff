@@ -45,6 +45,7 @@ def _emit_adder_batch(
     batch: list,
     *,
     layout: str,
+    ordering: str = "staged",
 ) -> tuple[list[Operation], int, dict]:
     size = len(batch)
     if size < 2:
@@ -79,7 +80,7 @@ def _emit_adder_batch(
             append_parity_into(operations, term.mask, target)
     else:
         raise ValueError(f"unsupported HWP layout {layout_name!r}")
-    arithmetic, weight_layout = hamming_weight_compute(parity, carries)
+    arithmetic, weight_layout = hamming_weight_compute(parity, carries, ordering=ordering)
     operations.extend(arithmetic)
     for bit, target in enumerate(weight_layout.output_qubits):
         operations.append(
@@ -103,6 +104,7 @@ def _emit_adder_batch(
         "term_ids": [term.id for term in batch],
         "size": size,
         "layout": layout_name,
+        "ordering": ordering,
         "data_restored": True,
         "parity_qubits": list(parity),
         "weight_qubits": list(weight_layout.output_qubits),
@@ -121,6 +123,7 @@ def compile_hwp_adder_unitary(
     *,
     batch_limit: int | None = None,
     layout: str = "auto",
+    ordering: str = "staged",
 ) -> Candidate:
     """Compile ordinary HWP using an emitted linear-size compressor network."""
     if constraints.model_profile != "unitary_clifford_t":
@@ -130,6 +133,8 @@ def compile_hwp_adder_unitary(
             "the audited adder HWP is a unitary adaptation; measured cleanup is not emitted",
             model_profile=constraints.model_profile,
         )
+    if ordering not in {"staged", "readiness"}:
+        raise ValueError(f"unsupported arithmetic ordering {ordering!r}")
     if layout not in {"auto", "copied_parities", "in_place_inputs"}:
         raise ValueError(f"unsupported HWP layout {layout!r}")
     normalized = preprocess(program)
@@ -184,7 +189,7 @@ def compile_hwp_adder_unitary(
         sizes = batch_sizes(len(terms), capacity, "balanced")
         for batch in chunks(terms, sizes):
             batch_operations, workspace, batch_trace = _emit_adder_batch(
-                program, group, batch, layout=group_layout
+                program, group, batch, layout=group_layout, ordering=ordering
             )
             operations.extend(batch_operations)
             peak_workspace = max(peak_workspace, workspace)
@@ -205,6 +210,7 @@ def compile_hwp_adder_unitary(
             "batch_limit": limit,
             "batch_policy": "balanced_for_fixed_limit",
             "layout": layout,
+            "ordering": ordering,
             "collective_batches": collective_batches,
             "workspace_scope": "clean_carries_with_in_place_data_when_applicable",
             "cleanup_model": "unitary_reverse_of_compute",

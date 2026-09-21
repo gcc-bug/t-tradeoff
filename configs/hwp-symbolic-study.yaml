@@ -1,0 +1,44 @@
+schema_version: 1
+base_revision: b68153e12aad4c11563159dac39821ab5f3dc3ec
+frozen_before_execution: '2026-09-21'
+development_config: configs/hwp-guided-search.yaml
+development_oracle: results/hwp-guided-diagnosis.json
+total_error: 1.0e-4
+seed: 0
+max_terms: 10
+max_batch: 8
+ancilla_envelope: 8
+search_seconds: 1
+frontier_seconds: 3
+baseline_seconds: 3
+repeats: 3
+cold_query_index: 0
+spaces:
+  original: [staged]
+  expanded: [staged, readiness]
+methods: [frontier, guided, symbolic, symbolic_resolved, symbolic_unpruned]
+precision_policy: normalized_term_blocks_v1
+cache_policy: >-
+  Each method/repetition starts with an empty rotation cache. Cold is one query;
+  warm builds once for the entire query sequence. Symbolic primitive summaries,
+  rotations, and emitted templates persist within that sequence; search queues,
+  labels and target solutions do not. No cross-method or cross-case reuse.
+additional_selection: >-
+  Native sizes 9 and 10, two groups of five, and two six-wire/eight-predicate
+  overlaps sampled without replacement from range(1,64) using recorded seeds.
+additional_cases:
+  - {id: native_9, kind: native, n: 9, angle: '0.173'}
+  - {id: native_10, kind: native, n: 10, angle: '0.173'}
+  - id: groups_5_5
+    kind: groups
+    groups:
+      - {size: 5, angle: '0.173'}
+      - {size: 5, angle: '0.291'}
+  - {id: overlap_fresh_1, kind: masks, n: 6, seed: 2026092101, masks: [5,55,23,11,38,63,48,29], angle: '0.173'}
+  - {id: overlap_fresh_2, kind: masks, n: 6, seed: 2026092102, masks: [11,57,19,17,40,6,41,35], angle: '0.173'}
+additional_queries:
+  - {id: count, preference: ['1','0','0'], ancilla: 8, depth: null}
+  - {id: tight_depth, preference: ['1/5','3/5','1/5'], ancilla: 4, depth: 120}
+  - {id: tight_storage, preference: ['3/5','1/5','1/5'], ancilla: 2, depth: 200}
+# Development retains ALL 27 original queries, including former holdouts.
+# Fresh cases use these three fixed queries; no favorable post-hoc selection.

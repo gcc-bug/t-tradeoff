@@ -72,7 +72,7 @@ def append_two_to_two_adder(
 
 
 def hamming_weight_compute(
-    inputs: tuple[int, ...], carries: tuple[int, ...]
+    inputs: tuple[int, ...], carries: tuple[int, ...], *, ordering: str = "staged"
 ) -> tuple[list[Operation], HammingWeightLayout]:
     """Emit the staged adder/compressor Hamming-weight construction.
 
@@ -89,7 +89,10 @@ def hamming_weight_compute(
     if len(set(inputs + carries)) != len(inputs + carries):
         raise ValueError("Hamming-weight input and carry registers must be disjoint")
 
+    if ordering not in {"staged", "readiness"}:
+        raise ValueError(f"unsupported arithmetic ordering {ordering!r}")
     operations: list[Operation] = []
+    ready = {q: 0 for q in inputs + carries}
     available = iter(carries)
     active = list(inputs)
     outputs: list[int] = []
@@ -97,6 +100,22 @@ def hamming_weight_compute(
     while active:
         stage_widths.append(len(active))
         next_weight: list[int] = []
+        if ordering == "readiness":
+            # Logical readiness, then physical wire ID, fixes all ties.
+            # Retired inputs stay allocated until inverse cleanup.
+            while len(active) >= 3:
+                active.sort(key=lambda q: (ready[q], q))
+                a, b, c = active[:3]
+                active = active[3:]
+                carry = next(available)
+                start = len(operations)
+                append_three_to_two_compressor(operations, a, b, c, carry)
+                for op in operations[start:]:
+                    level = max(ready[q] for q in op.qubits) + (op.kind == "toffoli")
+                    for q in op.qubits:
+                        ready[q] = level
+                active.append(c)
+                next_weight.append(carry)
         for index in range(0, len(active) - 2, 2):
             carry = next(available)
             append_three_to_two_compressor(
@@ -112,6 +131,9 @@ def hamming_weight_compute(
         else:
             carry = next(available)
             append_two_to_two_adder(operations, active[-2], active[-1], carry)
+            level = max(ready[active[-2]], ready[active[-1]], ready[carry]) + 1
+            for q in (active[-2], active[-1], carry):
+                ready[q] = level
             outputs.append(active[-1])
             next_weight.append(carry)
         active = next_weight
