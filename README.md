@@ -139,3 +139,27 @@ python scripts/run_hwp_pareto.py --verify
 
 The exact guarantee applies to the declared finite library and wave model.
 Actual emitted circuits and optional optimized children are verified separately.
+
+The [interleaved-search milestone](docs/hwp-interleaved-plan.md) keeps the same
+construction family, preserves local tradeoffs, and lets partial waves yield to
+shared rotation refinement. Optional certified load bounds coordinate workspace,
+data-wire conflicts, and original block boundaries. For example:
+
+```python
+from collective_phase.hwp_symbolic import SymbolicLibrary
+from collective_phase.hwp_cost_search import symbolic_search
+from collective_phase.lowering import RotationSynthesizer
+
+library = SymbolicLibrary(program, 1e-4, RotationSynthesizer(seed=0),
+                          max_batch=8, orderings=('staged', 'readiness'))
+result = symbolic_search(library, (1, 0, 0), ancilla_max=4, depth_max=120,
+                         interleave=True, coupled_bounds=False,
+                         target_cost=204, timeout_seconds=3)
+# A returned plan is verified. Inspect status and L/U on timeout;
+# reaching the requested target alone does not establish optimality.
+```
+
+Run `python scripts/run_hwp_interleaved_study.py` for the frozen development
+comparison against upfront refinement and strong batching. The first query's
+budget includes library setup; warm queries reuse that trial's caches. See
+[the resulting comparison](reports/hwp-interleaved-study.md) for outcomes and limits.

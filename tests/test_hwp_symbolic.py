@@ -83,7 +83,8 @@ def test_descriptor_precision_refinement_and_eager_agreement(program, synth):
     assert symbolic.stats['templates_materialized'] == 0
     assert symbolic.stats['rotations_refined'] == len({r.key for o in symbolic.options
         for r in o.requests if not r.angle.is_exact_clifford_t})
-    assert len({o.template_key for o in symbolic.options}) == symbolic.stats['graphs']
+    assert symbolic.stats['graphs'] == 0
+    assert symbolic.stats['timing_recipes'] == len(symbolic.recipes)
 
 
 @pytest.mark.parametrize('layout,ordering', product(['in_place_inputs','copied_parities'], ['staged','readiness']))
@@ -119,3 +120,38 @@ def test_parity_structure_and_contract_separate_cache_keys():
     other = SymbolicLibrary(lib.program,1e-4,RotationSynthesizer(seed=1))
     assert lib.options[0].requests[0].key != other.options[0].requests[0].key
     assert lib.fingerprint(4,None) != other.fingerprint(4,None)
+
+
+def test_transfer_evaluation_constructs_no_high_level_graph(monkeypatch, synth):
+    import collective_phase.hwp_symbolic as module
+    lib = SymbolicLibrary(native(7), 1e-4, synth, orderings=('staged', 'readiness'))
+    def forbidden(*args, **kwargs):
+        raise AssertionError('ordinary evaluation constructed a graph')
+    monkeypatch.setattr(lib, 'graph', forbidden)
+    monkeypatch.setattr(lib, 'local_program', forbidden)
+    monkeypatch.setattr(module, '_emit_adder_batch', forbidden)
+    for o in lib.options:
+        lib.resolve(o)
+    assert lib.stats['graphs'] == lib.stats['templates_materialized'] == 0
+    assert lib.stats['timing_recipes'] > 0
+
+
+@pytest.mark.parametrize('layout,ordering', product(['in_place_inputs', 'copied_parities'], ['staged', 'readiness']))
+def test_recipe_ports_against_emitted_scheduler_with_unequal_arrivals(layout, ordering, synth):
+    from collective_phase.lowering import lower_candidate
+    from collective_phase.baselines.common import CompilationConstraints
+    from collective_phase.baselines.hwp import compile_hwp_adder_unitary
+    program = native(6)
+    lib = SymbolicLibrary(program, 1e-4, synth, orderings=(ordering,))
+    o = next(o for o in lib.options if o.terms == lib.full_mask and o.layout == layout)
+    lib.resolve(o)
+    candidate = compile_hwp_adder_unitary(program, CompilationConstraints(None, 'unitary_clifford_t'),
+                                         layout=layout, ordering=ordering)
+    emitted = lower_candidate(candidate, 1e-4, synth)
+    recipe = lib.recipe(o)
+    arrivals = tuple((q * 17) % 41 for q in range(recipe.ports))
+    prefix = [GateEvent('t', (q,)) for q, level in enumerate(arrivals) for _ in range(level)]
+    probes = [GateEvent('x', (q,)) for q in range(recipe.ports)]
+    actual = schedule_events(prefix + emitted.events + probes).event_levels[-recipe.ports:]
+    counts = tuple(lib.rotations[r.key].t_count for r in o.requests)
+    assert recipe.depth(counts, arrivals) == tuple(actual)

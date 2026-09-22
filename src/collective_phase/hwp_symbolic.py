@@ -15,6 +15,7 @@ from pathlib import Path
 import time
 
 from .baselines.common import CompilationConstraints, append_direct_term
+from .baselines.arithmetic import hamming_weight_schedule
 from .baselines.hwp import _emit_adder_batch, compile_hwp_adder_unitary
 from .baselines.independent import compile_independent
 from .circuit import data_support
@@ -52,6 +53,73 @@ class TimingTransfer:
 
 
 TOFFOLI_TIMING = TimingTransfer.from_gates(exact_toffoli_gate_sequence((0, 1, 2)), 3)
+
+
+def _compressor_transfer(kind, inverse=False):
+    logical = ([('cx', (0, 1)), ('cx', (0, 2)), ('toffoli', (1, 2, 3)),
+                ('cx', (0, 1)), ('cx', (0, 3)), ('cx', (1, 2))] if kind == 'triple'
+               else [('toffoli', (0, 1, 2)), ('cx', (0, 1))])
+    gates = []
+    for gate, wires in reversed(logical) if inverse else logical:
+        gates.extend(exact_toffoli_gate_sequence(wires) if gate == 'toffoli' else [(gate, wires)])
+    return TimingTransfer.from_gates(gates, 4 if kind == 'triple' else 3)
+
+
+COMPRESSOR_TIMING = {(kind, inverse): _compressor_transfer(kind, inverse)
+                     for kind in ('triple', 'pair') for inverse in (False, True)}
+CX_TIMING = TimingTransfer.from_gates([('cx', (0, 1))], 2)
+
+
+@dataclass(frozen=True)
+class TimingRecipe:
+    """Port transfers around phase requests; no Operation objects or local IR."""
+    forward: tuple
+    phase_ports: tuple[int, ...]
+    inverse: tuple
+    ports: int
+
+    def depth(self, counts, arrivals=None):
+        levels = list(arrivals) if arrivals is not None else [0] * self.ports
+        if len(levels) != self.ports or len(counts) != len(self.phase_ports):
+            raise ValueError('timing port count mismatch')
+
+        def apply(steps):
+            for transfer, wires in steps:
+                outputs = transfer.apply(tuple(levels[q] for q in wires))
+                for q, value in zip(wires, outputs):
+                    levels[q] = value
+
+        apply(self.forward)
+        for q, count in zip(self.phase_ports, counts):
+            levels[q] += count
+        apply(self.inverse)
+        return tuple(levels)
+
+
+def timing_recipe(option):
+    """Describe the fixed recipe at compressor granularity, retaining port timing."""
+    n, m = len(option.data_wires), len(option.local_masks)
+    if option.layout == 'direct':
+        support = data_support(option.local_masks[0])
+        steps = tuple((CX_TIMING, (q, support[0])) for q in support[1:])
+        return TimingRecipe(steps, (support[0],), tuple(reversed(steps)), n)
+    if option.layout == 'copied_parities':
+        inputs = tuple(range(n, n + m))
+        prep = tuple((CX_TIMING, (q, target)) for mask, target in zip(option.local_masks, inputs)
+                     for q in data_support(mask))
+        # The emitter reverses predicate order, but keeps each parity's CNOT order.
+        cleanup = tuple((CX_TIMING, (q, target)) for mask, target in
+                        reversed(tuple(zip(option.local_masks, inputs))) for q in data_support(mask))
+        start = n + m
+    else:
+        inputs = tuple(mask.bit_length() - 1 for mask in option.local_masks)
+        prep = cleanup = ()
+        start = n
+    carries = tuple(range(start, n + option.workspace))
+    steps, layout = hamming_weight_schedule(inputs, carries, ordering=option.ordering)
+    forward = prep + tuple((COMPRESSOR_TIMING[kind, False], wires) for kind, wires in steps)
+    inverse = tuple((COMPRESSOR_TIMING[kind, True], wires) for kind, wires in reversed(steps)) + cleanup
+    return TimingRecipe(forward, layout.output_qubits, inverse, n + option.workspace)
 
 
 @dataclass(frozen=True)
@@ -100,12 +168,16 @@ class ComputationGraph:
 
 class SymbolicLibrary:
     def __init__(self, program, total_error, synthesizer, *, max_batch=10,
-                 max_terms=10, orderings=("staged",)):
+                 max_terms=10, orderings=("staged",), evaluator="transfer"):
         started = time.perf_counter()
         if not math.isfinite(total_error) or not 0 < total_error < 1:
             raise ValueError("total_error must lie in (0, 1)")
         if max_batch < 1 or max_terms < 1:
             raise ValueError("positive size limits required")
+        if evaluator not in {"transfer", "graph"}:
+            raise ValueError("unknown symbolic evaluator")
+        self.evaluator = evaluator
+        self.recipes = {}
         if not orderings or len(set(orderings)) != len(orderings) or any(
                 x not in {"staged", "readiness"} for x in orderings):
             raise ValueError("invalid arithmetic orderings")
@@ -124,6 +196,7 @@ class SymbolicLibrary:
         self.rotations, self.graphs, self.summaries, self.materialized = {}, {}, {}, {}
         self.epoch = 0
         self.stats = dict(descriptors=0, graphs=0, primitive_summaries=1,
+                          timing_recipes=0, evaluations=0, evaluator=evaluator,
                           rotation_keys=0, rotations_refined=0, templates_materialized=0,
                           circuits_emitted=0, circuits_verified=0, description_seconds=0.,
                           graph_seconds=0., summary_seconds=0., synthesis_seconds=0.,
@@ -208,32 +281,46 @@ class SymbolicLibrary:
         return self.graphs[key]
 
     def evaluate(self, option):
+        self.stats['evaluations'] += 1
         counts = tuple(self.rotations[r.key].t_count if r.key in self.rotations else 0
                        for r in option.requests)
         exact = all(r.key in self.rotations for r in option.requests)
         key = (option.template_key, counts, exact)
         if key not in self.summaries:
-            graph = self.graph(option)
             started = time.perf_counter()
-            levels = [0] * (len(option.data_wires) + option.workspace)
-            rotations = iter(counts)
-            for op in graph.operations:
-                if op.kind == "phase":
-                    levels[op.qubits[0]] += next(rotations)
-                elif op.kind == "toffoli":
-                    out = TOFFOLI_TIMING.apply(tuple(levels[q] for q in op.qubits))
-                    for q, value in zip(op.qubits, out):
-                        levels[q] = value
-                elif op.kind in {"cx", "x"}:
-                    value = max(levels[q] for q in op.qubits)
-                    for q in op.qubits:
-                        levels[q] = value
-                else:
-                    raise ValueError(f"unsupported symbolic primitive {op.kind}")
-            resources = (option.arithmetic_t + sum(counts), max(levels, default=0), option.workspace)
+            depth = (self.graph_depth(option, counts) if self.evaluator == 'graph'
+                     else max(self.recipe(option).depth(counts), default=0))
+            resources = (option.arithmetic_t + sum(counts), depth, option.workspace)
             self.summaries[key] = ResourceEvidence(resources, resources if exact else None, exact)
             self.stats["summary_seconds"] += time.perf_counter()-started
         return self.summaries[key]
+
+    def recipe(self, option):
+        # Timing topology is independent of angle, precision and physical embedding.
+        key = option.local_masks, option.layout, option.ordering
+        if key not in self.recipes:
+            self.recipes[key] = timing_recipe(option)
+            self.stats['timing_recipes'] += 1
+        return self.recipes[key]
+
+    def graph_depth(self, option, counts):
+        graph = self.graph(option)
+        levels = [0] * (len(option.data_wires) + option.workspace)
+        rotations = iter(counts)
+        for op in graph.operations:
+            if op.kind == "phase":
+                levels[op.qubits[0]] += next(rotations)
+            elif op.kind == "toffoli":
+                out = TOFFOLI_TIMING.apply(tuple(levels[q] for q in op.qubits))
+                for q, value in zip(op.qubits, out):
+                    levels[q] = value
+            elif op.kind in {"cx", "x"}:
+                value = max(levels[q] for q in op.qubits)
+                for q in op.qubits:
+                    levels[q] = value
+            else:
+                raise ValueError(f"unsupported symbolic primitive {op.kind}")
+        return max(levels, default=0)
 
     def unresolved(self, option):
         return tuple(r for r in option.requests if r.key not in self.rotations)
@@ -275,6 +362,9 @@ class SymbolicLibrary:
             self.stats["verification_seconds"] += time.perf_counter()-started
             if not proof.status.startswith("verified_lowered_"):
                 raise ValueError(f"symbolic template verification failed: {proof.message}")
+            counts = tuple(self.rotations[r.key].t_count for r in option.requests)
+            if self.graph_depth(option, counts) != self.evaluate(option).lower[1]:
+                raise ValueError("transfer disagrees with high-level graph")
             r = estimate_resources(lowered)
             if (r.t_count, r.t_depth, r.peak_workspace) != self.evaluate(option).lower:
                 raise ValueError("symbolic prediction disagrees with emitted template")

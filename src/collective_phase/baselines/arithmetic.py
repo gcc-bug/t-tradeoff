@@ -71,10 +71,10 @@ def append_two_to_two_adder(
     )
 
 
-def hamming_weight_compute(
+def hamming_weight_schedule(
     inputs: tuple[int, ...], carries: tuple[int, ...], *, ordering: str = "staged"
-) -> tuple[list[Operation], HammingWeightLayout]:
-    """Emit the staged adder/compressor Hamming-weight construction.
+) -> tuple[list[tuple[str, tuple[int, ...]]], HammingWeightLayout]:
+    """Describe compressor ports without constructing circuit operations.
 
     This follows Kivlichan et al., arXiv:1902.10673v4, Appendix A.1: reduce
     equal-weight bits in triples, handle an even final pair with a half adder,
@@ -91,7 +91,7 @@ def hamming_weight_compute(
 
     if ordering not in {"staged", "readiness"}:
         raise ValueError(f"unsupported arithmetic ordering {ordering!r}")
-    operations: list[Operation] = []
+    steps = []
     ready = {q: 0 for q in inputs + carries}
     available = iter(carries)
     active = list(inputs)
@@ -108,29 +108,26 @@ def hamming_weight_compute(
                 a, b, c = active[:3]
                 active = active[3:]
                 carry = next(available)
-                start = len(operations)
-                append_three_to_two_compressor(operations, a, b, c, carry)
-                for op in operations[start:]:
-                    level = max(ready[q] for q in op.qubits) + (op.kind == "toffoli")
-                    for q in op.qubits:
+                steps.append(("triple", (a, b, c, carry)))
+                # Match logical readiness, including CNOT synchronizations.
+                for kind, wires in (("cx", (a, b)), ("cx", (a, c)),
+                                    ("toffoli", (b, c, carry)), ("cx", (a, b)),
+                                    ("cx", (a, carry)), ("cx", (b, c))):
+                    level = max(ready[q] for q in wires) + (kind == "toffoli")
+                    for q in wires:
                         ready[q] = level
                 active.append(c)
                 next_weight.append(carry)
         for index in range(0, len(active) - 2, 2):
             carry = next(available)
-            append_three_to_two_compressor(
-                operations,
-                active[index],
-                active[index + 1],
-                active[index + 2],
-                carry,
-            )
+            steps.append(("triple", (active[index], active[index + 1],
+                                     active[index + 2], carry)))
             next_weight.append(carry)
         if len(active) % 2:
             outputs.append(active[-1])
         else:
             carry = next(available)
-            append_two_to_two_adder(operations, active[-2], active[-1], carry)
+            steps.append(("pair", (active[-2], active[-1], carry)))
             level = max(ready[active[-2]], ready[active[-1]], ready[carry]) + 1
             for q in (active[-2], active[-1], carry):
                 ready[q] = level
@@ -146,12 +143,24 @@ def hamming_weight_compute(
         raise AssertionError("not all HWP carry wires were consumed")
     output_set = set(outputs)
     garbage = tuple(wire for wire in inputs + carries if wire not in output_set)
-    return operations, HammingWeightLayout(
+    return steps, HammingWeightLayout(
         output_qubits=tuple(outputs),
         garbage_qubits=garbage,
         carry_qubits=carries,
         stage_widths=tuple(stage_widths),
     )
+
+
+def hamming_weight_compute(
+    inputs: tuple[int, ...], carries: tuple[int, ...], *, ordering: str = "staged"
+) -> tuple[list[Operation], HammingWeightLayout]:
+    """Materialize the shared compressor schedule as reversible operations."""
+    steps, layout = hamming_weight_schedule(inputs, carries, ordering=ordering)
+    operations = []
+    for kind, wires in steps:
+        append = append_three_to_two_compressor if kind == "triple" else append_two_to_two_adder
+        append(operations, *wires)
+    return operations, layout
 
 
 def invert_classical_operations(operations: list[Operation]) -> list[Operation]:

@@ -95,7 +95,8 @@ def template_layouts(local_masks, coefficient):
 
 def build_library(program: PhaseProgram, total_error: float,
                   synthesizer: RotationSynthesizer, *, max_batch: int = 10,
-                  max_terms: int = 10, orderings=("staged",)) -> Library:
+                  max_terms: int = 10, orderings=("staged",),
+                  check_time=lambda: None) -> Library:
     started = time.perf_counter()
     if not math.isfinite(total_error) or not 0 < total_error < 1:
         raise ValueError("total_error must lie in (0, 1)")
@@ -117,6 +118,7 @@ def build_library(program: PhaseProgram, total_error: float,
     for group_id, group in enumerate(normalized.groups):
         for size in range(1, min(max_batch, len(group.terms)) + 1):
             for subset in combinations(group.terms, size):
+                check_time()
                 footprint = 0
                 for term in subset:
                     footprint |= term.mask
@@ -141,7 +143,9 @@ def build_library(program: PhaseProgram, total_error: float,
                                      else compile_hwp_adder_unitary(local, constraints,
                                                                   batch_limit=size, layout=layout, ordering=ordering))
                         lowered = lower_candidate(candidate, allowance, synthesizer)
+                        check_time()
                         proof = verify_lowered_circuit(lowered, allowance, memory_cap_bytes=1)
+                        check_time()
                         if not proof.status.startswith("verified_lowered_"):
                             raise ValueError(f"invalid library entry: {proof.message}")
                         templates[key] = lowered
@@ -387,36 +391,43 @@ def baseline_frontiers(library: Library, ancilla_max: int, *, timeout_seconds: f
     output = {"direct": [], "uniform": [], "per_group": []}
     complete = True
     group_choices = []
-    for group in library.groups:
-        choices = set()
-        for cap in range(1, library.max_batch + 1):
-            n = len(group)
-            shapes = {tuple(sorted(batch_sizes(n, cap, "balanced"))),
-                      tuple(sorted([cap] * (n // cap) + ([n % cap] if n % cap else [])))}
-            for shape in shapes:
-                for partition in _partitions(group, shape):
-                    for layout in ("auto", "in_place_inputs", "copied_parities"):
-                        keys = []
-                        for mask in partition:
-                            kind = "direct" if mask.bit_count() == 1 else layout
-                            if kind == "auto":
-                                kind = ("in_place_inputs" if (mask, "in_place_inputs") in options
-                                        else "copied_parities")
-                            keys.append((mask, kind))
-                        # A fair uniform baseline may leave an unprofitable
-                        # batch as direct rotations; it must not pay gratuitous
-                        # HWP arithmetic merely because a cap was selected.
-                        alternatives = []
-                        for mask, kind in keys:
-                            direct = tuple(options[1 << i, "direct"][0] for i in group if mask & (1 << i))
-                            variants = {direct}
-                            if (mask, kind) in options:
-                                variants.update((i,) for i in options[mask, kind])
-                            alternatives.append(sorted(variants))
-                        for selected in product(*alternatives):
-                            choices.add((cap, tuple(sorted(i for batch in selected for i in batch))))
-        group_choices.append(sorted(choices))
+    def check_time():
+        if time.perf_counter() >= started + timeout_seconds:
+            raise _Deadline
+
     try:
+        check_time()
+        for group in library.groups:
+            choices = set()
+            for cap in range(1, library.max_batch + 1):
+                n = len(group)
+                shapes = {tuple(sorted(batch_sizes(n, cap, "balanced"))),
+                          tuple(sorted([cap] * (n // cap) + ([n % cap] if n % cap else [])))}
+                for shape in shapes:
+                    for partition in _partitions(group, shape):
+                        check_time()
+                        for layout in ("auto", "in_place_inputs", "copied_parities"):
+                            keys = []
+                            for mask in partition:
+                                kind = "direct" if mask.bit_count() == 1 else layout
+                                if kind == "auto":
+                                    kind = ("in_place_inputs" if (mask, "in_place_inputs") in options
+                                            else "copied_parities")
+                                keys.append((mask, kind))
+                            # A fair uniform baseline may leave an unprofitable
+                            # batch as direct rotations; it must not pay gratuitous
+                            # HWP arithmetic merely because a cap was selected.
+                            alternatives = []
+                            for mask, kind in keys:
+                                direct = tuple(options[1 << i, "direct"][0] for i in group if mask & (1 << i))
+                                variants = {direct}
+                                if (mask, kind) in options:
+                                    variants.update((i,) for i in options[mask, kind])
+                                alternatives.append(sorted(variants))
+                            for selected in product(*alternatives):
+                                check_time()
+                                choices.add((cap, tuple(sorted(i for batch in selected for i in batch))))
+            group_choices.append(sorted(choices))
         for combination in product(*group_choices):
             ids = tuple(sorted(i for _, group_ids in combination for i in group_ids))
             if ids not in partition_cache:

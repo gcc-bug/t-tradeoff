@@ -185,3 +185,22 @@ def test_affine_constants_and_duplicate_cancellation_survive_composition(synth):
     circuit, proof = emit(library, frontier(library, 0).plans[0], memory_cap_bytes=1024*1024)
     assert circuit.candidate.global_phase == pytest.approx(0.346)
     assert proof["status"] == "verified_lowered_dense"
+
+
+def test_library_and_reference_enumeration_respect_deadlines(synth, monkeypatch):
+    from collective_phase.hwp_pareto import _Deadline
+    import collective_phase.hwp_pareto as module
+    calls = 0
+    def stop():
+        nonlocal calls
+        calls += 1
+        raise _Deadline
+    with pytest.raises(_Deadline):
+        build_library(native(3), 1e-4, synth, check_time=stop)
+    assert calls == 1
+    lib = build_library(native(3), 1e-4, synth)
+    def forbidden(*args):
+        raise AssertionError('enumerated after deadline')
+    monkeypatch.setattr(module, '_partitions', forbidden)
+    result = baseline_frontiers(lib, 4, timeout_seconds=0)
+    assert not result['complete'] and result['partitions'] == 0

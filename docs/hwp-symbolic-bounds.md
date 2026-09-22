@@ -224,3 +224,14 @@ Stop this milestone at the tested arithmetic family. No accumulation,
 measurement-assisted cleanup, catalysts, new solver, or precision-policy change
 was added to rescue the timing results. Broader construction or scheduling work
 would be a separate experiment.
+
+## Subsequent interleaving milestone
+
+The experiment above remains a historical frozen result. The current library
+also offers compressor-level timing transfers (`evaluator='transfer'`, now the
+default); `evaluator='graph'` retains the earlier evaluator for comparison.
+`symbolic_search(..., interleave=True, coupled_bounds=True)` enables resumable
+partial-wave families and certified global resource-load bounds. See
+[`hwp-interleaved-plan.md`](hwp-interleaved-plan.md) for their proofs, boundaries,
+validation gates and separate experiment. These changes do not expand the
+staged/readiness arithmetic construction family.
