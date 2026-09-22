@@ -20,3 +20,11 @@ but are not evidence from the current workflow.
 In particular, `m2-reliable-evaluation.md`, `m3-structural-decision.md`, and
 the earlier pilot, repair, smoke, and diagnosis reports document the superseded
 dependent-triple investigation. They have deliberately not been rewritten.
+
+`hwp-interleaved-study.md` compares resumable symbolic wave generation with
+upfront refinement using equal per-query budgets, both arithmetic orderings,
+compact timing transfers, and optional certified global load bounds. It also
+records separate strong-batching and local-group-choice diagnostics. This is
+small-input development evidence within the existing complete-wave model.
+Read [the outcome analysis](hwp-interleaved-analysis.md) for the controller result,
+the verified local/global HWP witness, and the negative result for relaxation overhead.
