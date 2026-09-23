@@ -28,3 +28,10 @@ records separate strong-batching and local-group-choice diagnostics. This is
 small-input development evidence within the existing complete-wave model.
 Read [the outcome analysis](hwp-interleaved-analysis.md) for the controller result,
 the verified local/global HWP witness, and the negative result for relaxation overhead.
+
+`hwp-nine-study.md` isolates the constrained native-nine failure with equal-budget
+tie, queue-order, and partition-bound ablations. It includes an independent
+native partition/scheduling comparator, completed generic-wave references,
+separate seeded diagnostics, and two-group depth/workspace sweeps. Read
+[the analysis](hwp-nine-analysis.md) for attainment versus endpoint certification
+and the specialized-baseline comparison.

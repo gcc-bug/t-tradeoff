@@ -85,6 +85,33 @@ def completion_bounds(library, remaining, options=None):
     return t, d, a
 
 
+def partition_count_bound(options, remaining):
+    """Relax subset identity and scheduling, retain each group's block sizes.
+
+    For each group/size use the cheapest eligible block, allowing repeated use.
+    Every real partition maps to such an integer partition, so this remains a
+    lower bound even when overlapping predicates make subsets nonexchangeable.
+    Unknown rotation costs are already replaced by certified lower bounds.
+    """
+    groups = {}
+    for option in options:
+        if option.terms & remaining != option.terms:
+            continue
+        mask, sizes = groups.setdefault(option.group, [0, {}])
+        groups[option.group][0] = mask | option.terms
+        size = option.terms.bit_count()
+        sizes[size] = min(sizes.get(size, math.inf), option.resources[0])
+    total, covered = 0, 0
+    for mask, sizes in groups.values():
+        covered |= mask
+        dp = [0] + [math.inf] * mask.bit_count()
+        for n in range(1, len(dp)):
+            dp[n] = min((dp[n-size] + value for size, value in sizes.items() if size <= n),
+                        default=math.inf)
+        total += dp[-1]
+    return None if covered != remaining or total == math.inf else total
+
+
 def coupled_completion_bounds(library, remaining, options, ancilla_max, check_time=lambda: None):
     """Fractional resource loads, with complete-wave coupling relaxed.
 
@@ -346,12 +373,19 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                     timeout_seconds=60, tolerance='0', partial_pruning=True,
                     resolve_upfront=False, clock=time.perf_counter,
                     checkpoint=lambda stage: None, interleave=False,
-                    coupled_bounds=False, target_cost=None):
+                    coupled_bounds=False, target_cost=None, pareto_ties=False,
+                    progress_order=False, partition_bounds=False, seeds=()):
     """Lazy refinement with streaming waves and certified pending-family bounds.
 
     Queue keys may lag shared refinements, which only makes them weaker. Prefix
     dominance is used only after every selected primitive is resolved. The active
     parent stays pending through refinement, generation, and finalist verification.
+    ``pareto_ties`` completes equal-cost search and selects the lexicographically
+    smallest resource tuple, a Pareto endpoint (not the entire frontier).
+    Scalar OPTIMAL on interruption does not imply endpoint certification.
+    ``progress_order`` prefers more covered terms only at equal certified bounds.
+    ``partition_bounds`` adds a group-size partition relaxation of T-count.
+    ``seeds`` are diagnostic plans from this library, rechecked before use.
     ``checkpoint`` permits deterministic interruption tests (raise _Deadline).
     """
     from types import SimpleNamespace
@@ -378,7 +412,9 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                  interleave=interleave, coupled_bounds=coupled_bounds,
                  target_cost=None if target is None else str(target),
                  first_improvement_seconds=None, open_tasks=0, scans=0,
-                 interleaved_refinements=0, stale_rekeys=0)
+                 interleaved_refinements=0, stale_rekeys=0, pareto_ties=pareto_ties,
+                 progress_order=progress_order, partition_bounds=partition_bounds,
+                 incumbent_history=[], scalar_certified_seconds=None)
     queue, serial, labels, cache = [], 0, {}, {}
     pending, incumbent, upper = Fraction(0), None, None
     reason = 'EXHAUSTED'
@@ -404,40 +440,73 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
             for o in options:
                 check('bound_scan')
                 if o.terms & remaining == o.terms:
-                    views.append(SimpleNamespace(terms=o.terms, boundary=o.boundary,
+                    views.append(SimpleNamespace(terms=o.terms, group=o.group, boundary=o.boundary,
                                                  footprint=o.footprint, resources=library.evaluate(o).lower))
             cache[key] = (coupled_completion_bounds(library, remaining, views, ancilla_max,
                                                    lambda: check('bounds')) if coupled_bounds
                           else completion_bounds(library, remaining, views))
+            if partition_bounds and cache[key] is not None:
+                count = partition_count_bound(views, remaining)
+                cache[key] = None if count is None else (max(cache[key][0], count), *cache[key][1:])
         return cache[key]
+
+    def bound_value(resources):
+        if not feasible(resources):
+            return None
+        value = cost(resources, w)
+        # Componentwise lower resources also bound their lexicographic tuple.
+        # At equal objective cost this subtree cannot improve our endpoint.
+        if pareto_ties and upper is not None and value == upper and resources >= incumbent.resources:
+            return None
+        return value
 
     def bound_for(remaining, r):
         tail = tail_bound(remaining)
         if tail is None:
             return None
         resources = (r[0]+tail[0], r[1]+tail[1], max(r[2], tail[2]))
-        return cost(resources, w) if feasible(resources) else None
+        return bound_value(resources)
 
     def push(bound, remaining, waves, opened=None):
         nonlocal serial
         serial += 1
-        heapq.heappush(queue, (bound, serial, remaining, waves, opened, library.epoch))
+        covered = library.full_mask.bit_count() - remaining.bit_count()
+        if opened is not None:
+            covered += opened.cover.bit_count()
+        priority = (0, ())
+        if progress_order:
+            prefix = library.plan_resources(waves)
+            tail = tail_bound(remaining ^ (opened.cover if opened is not None else 0))
+            if tail is None:
+                return
+            wave = library.plan_resources((opened.chosen,)) if opened is not None and opened.chosen else (0, 0, 0)
+            relaxed = (prefix[0]+wave[0]+tail[0], prefix[1]+max(wave[1], tail[1]),
+                       max(prefix[2], wave[2], tail[2]))
+            priority = (-covered, relaxed)
+        heapq.heappush(queue, (bound, priority, serial, remaining, waves, opened, library.epoch))
         stats['queue_peak'] = max(stats['queue_peak'], len(queue))
+
+    def prunable(bound):
+        return upper is not None and (bound > upper if pareto_ties else bound >= upper)
 
     def accept(waves):
         nonlocal incumbent, upper
         r = library.plan_resources(waves)
-        if not feasible(r) or (upper is not None and cost(r, w) >= upper):
+        value = cost(r, w)
+        if not feasible(r) or (upper is not None and
+                (value, r if pareto_ties else ()) >=
+                (upper, incumbent.resources if pareto_ties else ())):
             return
         check('before_emission')
         plan = Plan(r, waves)
         lowered, proof = library.emit(plan, check_time=lambda: check('materialization'))
-        if upper is not None and stats['first_improvement_seconds'] is None:
+        if upper is not None and value < upper and stats['first_improvement_seconds'] is None:
             stats['first_improvement_seconds'] = clock()-started
-        incumbent, upper = plan, cost(r, w)
+        incumbent, upper = plan, value
         stats['incumbent_emitted'] = estimate_resources(lowered).to_dict()
         stats['incumbent_verification'] = proof
         stats['incumbent_prediction'] = r
+        stats['incumbent_history'].append(dict(seconds=clock()-started, cost=str(value), resources=r))
         if stats['first_incumbent_seconds'] is None:
             stats['first_incumbent_seconds'] = clock()-started
 
@@ -457,7 +526,7 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                 # Remaining terms may JOIN this wave: use max, never sum, for D.
                 relaxed = (prefix[0]+r[0]+tail[0], prefix[1]+max(r[1], tail[1]),
                            max(prefix[2], r[2], tail[2]))
-                if not feasible(relaxed) or (upper is not None and cost(relaxed, w) >= upper):
+                if not feasible(relaxed) or prunable(cost(relaxed, w)):
                     stats['partial_pruned'] += 1
                     return
             stats['waves'] += 1
@@ -485,7 +554,7 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
             return None
         relaxed = (prefix[0]+r[0]+tail[0], prefix[1]+max(r[1], tail[1]),
                    max(prefix[2], r[2], tail[2]))
-        return cost(relaxed, w) if feasible(relaxed) else None
+        return bound_value(relaxed)
 
     def refine_one(ids):
         requests = {r.key: r for i in ids for r in library.unresolved(library.options[i])}
@@ -509,7 +578,7 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
             child_waves = waves + (tuple(sorted(opened.chosen)),)
             rest = remaining ^ opened.cover
             child_bound = bound_for(rest, library.plan_resources(child_waves))
-            if child_bound is not None and (upper is None or child_bound < upper):
+            if child_bound is not None and not prunable(child_bound):
                 push(max(bound, child_bound), rest, child_waves)
             push(bound, remaining, waves, OpenWave(opened.chosen, opened.cover,
                                                   opened.footprint, opened.cursor, False))
@@ -535,14 +604,14 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                          opened.cursor+1 if opened.chosen else 0, True)
         stats['partial_waves'] += 1
         child_bound = open_bound(remaining, prefix, child)
-        if child_bound is None or (upper is not None and child_bound >= upper):
+        if child_bound is None or prunable(child_bound):
             stats['partial_pruned'] += 1
             return
         # Refine before the sibling cursor resumes, even if its weaker bound
         # would otherwise keep every informative child behind a large expansion.
         refine_one(child.chosen)
         child_bound = open_bound(remaining, prefix, child)
-        if child_bound is not None and (upper is None or child_bound < upper):
+        if child_bound is not None and not prunable(child_bound):
             push(max(bound, child_bound), remaining, waves, child)
 
     def global_lower():
@@ -570,6 +639,18 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                 seed_waves.append([o.id])
         else:
             accept(tuple(tuple(wave) for wave in seed_waves))
+        for seed in seeds:
+            if len(seed.resources) != 3 or any(type(r) is not int or r < 0 for r in seed.resources):
+                raise ValueError('seed resources must be exact nonnegative integers')
+            if any(type(i) is not int or not 0 <= i < len(library.options)
+                   for wave in seed.waves for i in wave):
+                raise ValueError('invalid seed option')
+            for wave in seed.waves:
+                for i in wave:
+                    library.resolve(library.options[i], lambda: check('refinement'))
+            # emit checks coverage, boundaries, footprints and claimed resources.
+            library.emit(seed, check_time=lambda: check('materialization'))
+            accept(seed.waves)
         if resolve_upfront:
             for o in options:
                 library.resolve(o, lambda: check('refinement'))
@@ -589,16 +670,18 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                     if stats[key] is None and (upper == lower or
                             lower > 0 and upper <= (1+Fraction(percentage, 100))*lower):
                         stats[key] = clock()-started
-                if lower == upper or (eta > 0 and lower > 0 and upper <= (1+eta)*lower):
+                if lower == upper and stats['scalar_certified_seconds'] is None:
+                    stats['scalar_certified_seconds'] = clock()-started
+                if (lower == upper and not pareto_ties) or (eta > 0 and lower > 0 and upper <= (1+eta)*lower):
                     reason = 'BOUND_CLOSED' if lower == upper else 'GAP_TOLERANCE'
                     break
             check('queue')
-            old_bound, _, remaining, waves, opened, epoch = heapq.heappop(queue)
+            old_bound, _, _, remaining, waves, opened, epoch = heapq.heappop(queue)
             pending = old_bound
             resources = library.plan_resources(waves)
             bound = (open_bound(remaining, resources, opened) if opened is not None
                      else bound_for(remaining, resources))
-            if bound is None or (upper is not None and bound >= upper):
+            if bound is None or prunable(bound):
                 stats['bound_pruned'] += 1
                 pending = None
                 continue
@@ -643,7 +726,7 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                 child_waves = waves + (wave,)
                 rest = remaining ^ cover
                 child_bound = bound_for(rest, library.plan_resources(child_waves))
-                if child_bound is not None and (upper is None or child_bound < upper):
+                if child_bound is not None and not prunable(child_bound):
                     push(max(bound, child_bound), rest, child_waves)
             pending = None
     except _Deadline:
@@ -652,6 +735,9 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
     lower = global_lower()
     status = ('OPTIMAL' if lower == upper else 'FEASIBLE') if upper is not None else (
         'TIMEOUT' if reason == 'TIMEOUT' else 'INFEASIBLE')
-    stats.update(seconds=clock()-started, queue_size=len(queue), bounds_cached=len(cache),
+    if upper is not None and lower == upper and stats['scalar_certified_seconds'] is None:
+        stats['scalar_certified_seconds'] = clock()-started
+    stats.update(endpoint_certified=bool(pareto_ties and incumbent is not None and not queue and pending is None),
+                 seconds=clock()-started, queue_size=len(queue), bounds_cached=len(cache),
                  symbolic=dict(library.stats), target_reached=target is not None and upper is not None and upper <= target)
     return SearchResult(status, reason, incumbent, lower, upper, w, fp, stats)

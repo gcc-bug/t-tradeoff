@@ -342,3 +342,82 @@ def test_native_nine_count_certificate_against_partition_only_oracle():
     lib = SymbolicLibrary(program, 1e-4, synth, max_batch=8, orderings=('staged', 'readiness'))
     result = symbolic_search(lib, (1, 0, 0), 4, interleave=True)
     assert result.lower == result.upper == optimum
+
+
+@pytest.mark.parametrize('interleave', [False, True])
+def test_pareto_endpoint_matches_independent_oracle(cases, interleave):
+    # Zero-weight objectives make equality pruning observable: a scalar
+    # certificate alone need not choose a nondominated resource tuple.
+    for program, synth, eager in cases:
+        for cap, depth, w in product((0, 2, 4), (None, 100),
+                                     ((1, 0, 0), (0, 1, 0), (0, 0, 1), ('1/3', '1/2', '1/6'))):
+            w = weights(w)
+            candidates = [r for r in enumerate_resources(eager, eager.full_mask, cap)
+                          if depth is None or r[1] <= depth]
+            expected = min(candidates, key=lambda r: (cost(r, w), r), default=None)
+            lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+            result = symbolic_search(lib, w, cap, depth, interleave=interleave, pareto_ties=True,
+                                     partition_bounds=True, progress_order=True)
+            if expected is None:
+                assert result.status == 'INFEASIBLE'
+            else:
+                assert result.plan.resources == expected
+                assert result.stats['endpoint_certified']
+
+
+def test_partition_relaxation_at_every_refinement_and_remaining_set(cases):
+    from collective_phase.hwp_cost_search import partition_count_bound
+    for program, synth, eager in cases:
+        lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+        requests = list({r.key: r for o in lib.options for r in lib.unresolved(o)}.values())
+        for step in range(len(requests)+1):
+            for cap in (0, 2, 4):
+                views = [SimpleNamespace(group=o.group, terms=o.terms, resources=lib.evaluate(o).lower)
+                         for o in lib.options if o.workspace <= cap]
+                for remaining in range(lib.full_mask+1):
+                    bound = partition_count_bound(views, remaining)
+                    for actual in enumerate_resources(eager, remaining, cap):
+                        assert bound is not None and bound <= actual[0]
+            if step < len(requests):
+                lib.refine(requests[step])
+
+
+@pytest.mark.parametrize('stage', ['bounds', 'bound_scan', 'queue', 'wave_close', 'partial_wave_scan',
+                                  'refinement', 'before_emission', 'materialization'])
+def test_endpoint_interruption_keeps_scalar_certificate(cases, stage):
+    program, synth, eager = cases[0]
+    optimum = min(r[0] for r in enumerate_resources(eager, eager.full_mask, 4))
+    for occurrence in (1, 3, 15):
+        count = 0
+        def stop(where):
+            nonlocal count
+            if where == stage:
+                count += 1
+                if count == occurrence:
+                    raise _Deadline
+        lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+        r = symbolic_search(lib, (1, 0, 0), 4, interleave=True, pareto_ties=True, progress_order=True,
+                            partition_bounds=True, checkpoint=stop)
+        assert r.lower <= optimum
+        assert r.upper is None or optimum <= r.upper
+        if r.reason == 'TIMEOUT':
+            assert not r.stats['endpoint_certified']
+
+
+def test_seed_is_verified_and_bad_resources_rejected(cases):
+    from collective_phase.hwp_pareto import Plan, frontier
+    program, synth, eager = cases[0]
+    seed = min(frontier(eager, 4).plans, key=lambda p: p.resources)
+    lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+    r = symbolic_search(lib, (1, 0, 0), 4, seeds=(seed,), interleave=True, pareto_ties=True, partition_bounds=True)
+    assert r.plan.resources == seed.resources and r.stats['endpoint_certified']
+    with pytest.raises(ValueError, match='inconsistent plan resources'):
+        symbolic_search(lib, (1, 0, 0), 4, seeds=(Plan((0, 0, 0), seed.waves),))
+
+
+def test_seed_requires_exact_integer_resources(cases):
+    from collective_phase.hwp_pareto import Plan
+    program, synth, _ = cases[0]
+    lib = SymbolicLibrary(program, 1e-4, synth)
+    with pytest.raises(ValueError, match='exact nonnegative integers'):
+        symbolic_search(lib, (1, 0, 0), 4, seeds=(Plan((0.0, 0, 0)),))

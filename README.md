@@ -163,3 +163,10 @@ Run `python scripts/run_hwp_interleaved_study.py` for the frozen development
 comparison against upfront refinement and strong batching. The first query's
 budget includes library setup; warm queries reuse that trial's caches. See
 [the resulting comparison](reports/hwp-interleaved-study.md) for outcomes and limits.
+
+The [constrained nine-rotation experiment](docs/hwp-nine-experiment.md) adds
+opt-in Pareto-aware endpoint search (`pareto_ties=True`), a block-size partition
+lower bound (`partition_bounds=True`), and progress ordering (`progress_order=True`).
+Scalar `OPTIMAL` and `stats['endpoint_certified']` are separate guarantees.
+Run `python scripts/run_hwp_nine_study.py` to compare these ablations with an
+independent native partition/scheduling baseline and coupled two-group probes.
