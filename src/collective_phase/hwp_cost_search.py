@@ -374,7 +374,8 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                     resolve_upfront=False, clock=time.perf_counter,
                     checkpoint=lambda stage: None, interleave=False,
                     coupled_bounds=False, target_cost=None, pareto_ties=False,
-                    progress_order=False, partition_bounds=False, seeds=()):
+                    progress_order=False, partition_bounds=False,
+                    integer_t_bounds=False, seeds=()):
     """Lazy refinement with streaming waves and certified pending-family bounds.
 
     Queue keys may lag shared refinements, which only makes them weaker. Prefix
@@ -385,6 +386,8 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
     Scalar OPTIMAL on interruption does not imply endpoint certification.
     ``progress_order`` prefers more covered terms only at equal certified bounds.
     ``partition_bounds`` adds a group-size partition relaxation of T-count.
+    ``integer_t_bounds`` rounds only the T-count completion lower bound up to
+    an integer; the weighted objective remains an exact rational.
     ``seeds`` are diagnostic plans from this library, rechecked before use.
     ``checkpoint`` permits deterministic interruption tests (raise _Deadline).
     """
@@ -414,6 +417,7 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
                  first_improvement_seconds=None, open_tasks=0, scans=0,
                  interleaved_refinements=0, stale_rekeys=0, pareto_ties=pareto_ties,
                  progress_order=progress_order, partition_bounds=partition_bounds,
+                 integer_t_bounds=integer_t_bounds,
                  incumbent_history=[], scalar_certified_seconds=None)
     queue, serial, labels, cache = [], 0, {}, {}
     pending, incumbent, upper = Fraction(0), None, None
@@ -448,6 +452,8 @@ def symbolic_search(library, coefficients, ancilla_max, depth_max=None, *,
             if partition_bounds and cache[key] is not None:
                 count = partition_count_bound(views, remaining)
                 cache[key] = None if count is None else (max(cache[key][0], count), *cache[key][1:])
+            if integer_t_bounds and cache[key] is not None:
+                cache[key] = (math.ceil(cache[key][0]), *cache[key][1:])
         return cache[key]
 
     def bound_value(resources):

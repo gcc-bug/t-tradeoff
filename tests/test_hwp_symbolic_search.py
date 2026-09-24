@@ -382,6 +382,57 @@ def test_partition_relaxation_at_every_refinement_and_remaining_set(cases):
                 lib.refine(requests[step])
 
 
+def test_integer_t_bound_and_mixed_scalar_cost(cases):
+    program, synth, eager = cases[0]
+    oracle = enumerate_resources(eager, eager.full_mask, 4)
+    min_t = min(oracle, key=lambda r: r[0])
+    w = weights(('2/7', '4', '1/10'))
+    optimum = min(cost(r, w) for r in oracle)
+    assert cost(min_t, w) > optimum
+    assert optimum.denominator != 1
+    for scale in (1, 7):
+        lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+        result = symbolic_search(lib, tuple(scale*x for x in w), 4, interleave=True,
+                                 integer_t_bounds=True)
+        assert result.status == 'OPTIMAL'
+        assert result.lower == result.upper == scale*optimum
+        assert cost(result.plan.resources, w) == optimum
+
+
+def test_integer_t_completion_bound_at_every_refinement(cases):
+    from math import ceil
+    program, synth, eager = cases[0]
+    lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+    requests = list({r.key: r for o in lib.options for r in lib.unresolved(o)}.values())
+    w = weights(('1/3', '1/7', '2/5'))
+    for request in (None, *requests):
+        if request is not None:
+            lib.refine(request)
+        views = [SimpleNamespace(terms=o.terms, resources=lib.evaluate(o).lower)
+                 for o in lib.options if o.workspace <= 4]
+        for remaining in range(lib.full_mask+1):
+            bound = completion_bounds(lib, remaining, views)
+            relaxed = (ceil(bound[0]), bound[1], bound[2])
+            for actual in enumerate_resources(eager, remaining, 4):
+                assert relaxed[0] <= actual[0]
+                assert cost(relaxed, w) <= cost(actual, w)
+
+
+def test_integer_t_bounds_preserve_interrupted_certificates(cases):
+    program, synth, eager = cases[0]
+    w = weights(('1/3', '1/7', '2/5'))
+    optimum = min(cost(r, w) for r in enumerate_resources(eager, eager.full_mask, 4))
+    for stage in ('bounds', 'partial_wave_scan', 'refinement', 'materialization'):
+        def stop(where):
+            if where == stage:
+                raise _Deadline
+        lib = SymbolicLibrary(program, 1e-4, synth, orderings=('staged', 'readiness'))
+        result = symbolic_search(lib, w, 4, interleave=True, integer_t_bounds=True,
+                                 checkpoint=stop)
+        assert result.lower <= optimum
+        assert result.upper is None or result.upper >= optimum
+
+
 @pytest.mark.parametrize('stage', ['bounds', 'bound_scan', 'queue', 'wave_close', 'partial_wave_scan',
                                   'refinement', 'before_emission', 'materialization'])
 def test_endpoint_interruption_keeps_scalar_certificate(cases, stage):
