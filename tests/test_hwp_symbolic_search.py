@@ -433,6 +433,32 @@ def test_integer_t_bounds_preserve_interrupted_certificates(cases):
         assert result.upper is None or result.upper >= optimum
 
 
+def test_linear_cost_quality_and_incomplete_report(monkeypatch):
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'scripts'))
+    from run_hwp_linear_cost_study import render
+
+    w = weights(('1', '12', '1'))
+    assert cost((150, 50, 0), w) < cost((108, 54, 1), w)
+    assert cost((108, 54, 1), weights(('1', '0.1', '1'))) < cost(
+        (150, 50, 0), weights(('1', '0.1', '1')))
+    cfg = dict(cases=[dict(id='tiny', kind='native')], queries=[dict(id='depth',
+        weights=['1', '12', '1'])], methods=['rounded_interleaved'])
+    row = dict(case='tiny', query='depth', method='rounded_interleaved', repeat=0,
+               U='750', L='700', gap='50', plan={'resources':[150,50,0]},
+               seconds=3., status='FEASIBLE', incumbent_history=[dict(seconds=1., cost='750')],
+               overrun_seconds=0.)
+    data = dict(config=cfg, samples=[dict(row, repeat=i) for i in range(3)],
+                references=[dict(case='tiny', kind='exact', complete=False,
+                                 plans=[dict(resources=[150,50,0])]),
+                            dict(case='tiny', kind='batching', complete=True,
+                                 plans=[dict(resources=[108,54,1])])])
+    report = render(data)
+    assert 'incomplete (best U=750)' in report
+    assert "('1', '12', '1')" in report
+    assert '354' not in report
+
+
 @pytest.mark.parametrize('stage', ['bounds', 'bound_scan', 'queue', 'wave_close', 'partial_wave_scan',
                                   'refinement', 'before_emission', 'materialization'])
 def test_endpoint_interruption_keeps_scalar_certificate(cases, stage):

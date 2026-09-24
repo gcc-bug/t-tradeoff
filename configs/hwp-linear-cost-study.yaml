@@ -1,0 +1,25 @@
+schema_version: 1
+purpose: Frozen mixed linear-cost evaluation in the existing finite HWP/direct family.
+frozen_before_execution: '2026-09-24'
+total_error: 1.0e-4
+seed: 0
+max_terms: 10
+max_batch: 8
+orderings: [staged, readiness]
+ancilla: 4
+depth: null
+budget_seconds: 3
+repeats: 3
+reference_seconds: 60
+methods: [rounded_interleaved, rounded_partition_progress, native_partition]
+cases:
+  - {id: native_9, kind: native, n: 9, angle: '0.173'}
+  - {id: overlap_3, kind: masks, n: 3, masks: [1, 2, 3, 4, 5, 6], angle: '0.173'}
+  - {id: overlap_4_probe, kind: masks, n: 4, masks: [3, 5, 9, 6, 10, 12], angle: '0.217'}
+queries:
+  - {id: count_emphasis, weights: ['1', '0.1', '1']}
+  - {id: depth_emphasis, weights: ['1', '4', '1']}
+  - {id: workspace_emphasis, weights: ['1', '0.1', '40']}
+  - {id: mixed_emphasis, weights: ['1', '2', '15']}
+cache_policy: Fresh input, synthesizer, and library per method/query/repetition. References are separate and do not seed timed searches.
+timing_policy: Input setup, cost refinement, failed exploration, and verified emission are charged. Imports/startup and serialization are excluded. Actual overruns are recorded.
