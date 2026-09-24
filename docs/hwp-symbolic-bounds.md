@@ -1,5 +1,8 @@
 # Symbolic HWP bounds
 
+Scope update: this is a record of earlier bound development. The active
+evaluation uses [a fixed supplied linear cost](hwp-linear-cost-evaluation.md).
+
 Implementation base: `b68153e12aad4c11563159dac39821ab5f3dc3ec`.
 Branch: `research/hwp-symbolic-bounds`. The handoff is
 [`t-tradeoff-symbolic-bounds-plan.md`](../t-tradeoff-symbolic-bounds-plan.md).

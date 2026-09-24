@@ -1,5 +1,8 @@
 # Interleaved HWP: outcome and next decision
 
+Scope update: these controller and construction results remain historical
+development evidence. The active objective is the [fixed mixed linear cost](../docs/hwp-linear-cost-evaluation.md).
+
 Interleaving improves the controller on this development workload. Retaining
 alternatives also resolves a real HWP case where independent local optima cannot
 meet the global depth limit. The new global load relaxation is sound but adds

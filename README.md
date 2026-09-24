@@ -15,13 +15,23 @@ commuting-Pauli diagonalization are outside the current contract.
 
 ## Workflow
 
-The workflow normalizes a `PhaseProgram`, emits shared construction seeds, and
+The active HWP question is to minimize the supplied, fixed linear cost
+`J = lambda_T*T + lambda_D*D_T + lambda_A*A` with nonnegative weights, not all
+zero. `D_T` is complete-wave T-depth; emitted-circuit depth is recorded
+separately. A query may impose common hard resource limits, but those limits
+do not change its objective. Search returns a verified incumbent cost `U` and
+a certified lower bound `L`; `L = U` proves scalar optimality within the fixed
+HWP/direct recipe library, precision policy, clean-ancilla contract, arithmetic
+orderings, and wave model. See [the linear-cost protocol](docs/hwp-linear-cost-evaluation.md)
+and [its study](reports/hwp-linear-cost-study.md).
+
+The construction workflow normalizes a `PhaseProgram`, emits shared construction seeds, and
 applies exact rewrites through PyZX, optional Feynman, or a limited clean-scratch
 phase-polynomial action. Every accepted circuit is checked against its verified
 parent chain, scheduled, and counted as `(T, T_depth, allocated ancillas)`
 before one immutable final objective and hard limits choose the endpoint.
 
-The bounded controller supports adaptive or frozen initial preference vectors,
+The historical bounded controller supports adaptive or frozen initial preference vectors,
 fixed static preferences, and two successive fixed pass orders, all using the same seeds
 and action library. Its attempt trace records intermediate resource changes,
 including rejected rewrites. `--force` rebuilds only JSON checkpoints below
@@ -60,7 +70,7 @@ the required exact post-synthesis optimization. Feynman is an optional external
 executable; a missing executable is reported as unsupported rather than
 replaced by a local stand-in.
 
-## Default Study
+## Historical Default Study
 
 ```bash
 python -m collective_phase audit --config configs/default-study.yaml
@@ -123,10 +133,10 @@ Project-local ARA records claims, evidence, and research milestones in the
 ignored `ara/` directory. See [docs/ara.md](docs/ara.md) for the pinned setup,
 scope, and private publication policy.
 
-## Resource-Constrained HWP Synthesis
+## Historical HWP Diagnostics
 
 The finite-library Pareto study is independent of historical pass-order search.
-It composes verified HWP/direct blocks in complete waves and answers minimum-T
+It composes verified HWP/direct blocks in complete waves and answers diagnostic minimum-T
 queries under depth and clean-workspace caps. Read
 [the model and construction audit](docs/hwp-pareto-model.md) and
 [the recorded study](reports/hwp-pareto-study.md).

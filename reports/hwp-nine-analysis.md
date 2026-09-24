@@ -1,5 +1,10 @@
 # Constrained nine-rotation outcome
 
+Scope update: this count-first endpoint diagnosis is historical evidence. The
+active mixed-cost protocol is [here](../docs/hwp-linear-cost-evaluation.md).
+Further endpoint certification is a superseded priority, not an error in these
+recorded results.
+
 The block-size partition bound repairs the observed scalar-search failure;
 Pareto-aware tie handling alone does not. Progress ordering improves which
 minimum-T endpoint is reached. The independent native partition/scheduling

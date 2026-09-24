@@ -1,5 +1,18 @@
 # Report Status
 
+The active question and frozen protocol are in
+[the mixed linear-cost evaluation](../docs/hwp-linear-cost-evaluation.md), with
+new results in [the study](hwp-linear-cost-study.md). Earlier measurements are
+preserved as development or historical evidence:
+
+| Evidence | Retain as | Does not establish |
+|---|---|---|
+| Native-nine count search | Bound and search diagnosis | Effectiveness across mixed linear costs |
+| Endpoint tie study | Optional secondary-selection diagnosis | A scalar-optimality requirement |
+| Native partition frontier | Exact reference on its checked domain | Applicability to overlapping predicates |
+| Workspace coordination witnesses | Construction and scheduling mechanism checks | Superiority over strong batching |
+| Adaptive and backend studies | Historical implementation experiments | The active research objective |
+
 `hwp-pareto-study.md` records the finite-library unitary HWP Pareto experiment,
 including the strengthened remainder baseline, exact model frontiers, emitted
 circuits, and common downstream optimization. Its evidence is development-only
