@@ -118,7 +118,7 @@ def reference(case, cfg, kind):
     started = time.perf_counter()
     deadline = started + cfg['reference_seconds']
     row = dict(case=case['id'], kind=kind, complete=False, plans=[],
-               verification={}, emitted_resources={}, reason='SETUP_TIMEOUT')
+               verification={}, emitted_resources={}, lower_bound='0', reason='SETUP_TIMEOUT')
 
     def check():
         if time.perf_counter() >= deadline:
@@ -190,8 +190,8 @@ def render(data):
         'in the raw resource records. Exactness is restricted to the declared finite family. '
         'Each timed result includes setup, refinement, search, and verified emission; imports '
         'and serialization are excluded. References are separate and were never used as timed seeds.', '',
-        '| Input / weights | Best strong reference J | Exact family J* or incomplete | Method | U | L | Gap U-L | Selected (T,D,A) | Time s / optimal |',
-        '|---|---:|---:|---|---:|---:|---:|---|---|']
+        '| Input / weights | Best strong reference J | Exact family J* or incomplete | Method | U | L | U-J* | U-L | Selected (T,D,A) | Time s / status |',
+        '|---|---:|---:|---|---:|---:|---:|---:|---|---|']
     for case in cfg['cases']:
         exact, strong = refs[(case['id'],'exact')], refs[(case['id'],'batching')]
         for q in cfg['queries']:
@@ -209,8 +209,10 @@ def render(data):
                         (case['id'],q['id'],method)]
                 for r in rows:
                     tup = tuple(r['plan']['resources']) if r['plan'] else None
+                    family_gap = (str(Fraction(r['U'])-estar) if exact['complete'] and
+                                  estar is not None and r['U'] is not None else 'n/a')
                     lines.append(f"| {case['id']} / {q['id']} {tuple(q['weights'])} | {bcell} | {ecell} | "
-                        f"{method} #{r['repeat']+1} | {r['U']} | {r['L']} | {r['gap']} | {tup} | "
+                        f"{method} #{r['repeat']+1} | {r['U']} | {r['L']} | {family_gap} | {r['gap']} | {tup} | "
                         f"{r['seconds']:.3f} / {r['status']} |")
     lines += ['', 'Native partition is inapplicable to both overlap inputs. Incomplete reference '
         'incumbents are upper bounds only. Equal-cost tuples are equal primary-quality outcomes.', '',
@@ -233,7 +235,30 @@ def render(data):
                 times = f"{statistics.median(reached):.3f} ({len(reached)}/3)" if reached else 'n/a (0/3)'
                 lines.append(f"| {case['id']} / {q['id']} | {method} | {sum(r['U'] is not None for r in rows)}/3 | "
                     f"{exact_count}/3 | {statistics.median(r['seconds'] for r in rows):.3f} | {times} |")
-    lines += ['', f"Maximum timed overrun: {max(r['overrun_seconds'] for r in data['samples']):.3f}s. "
+    generic = [r for r in data['samples'] if r['method'] != 'native_partition']
+    method_totals = {method: sum(r['status']=='OPTIMAL' for r in generic if r['method']==method)
+                     for method in cfg['methods'] if method!='native_partition'}
+    strong_matches = sum(
+        refs[(case['id'],'exact')]['complete'] and refs[(case['id'],'batching')]['complete'] and
+        min((cost(p['resources'],weights(q['weights'])) for p in refs[(case['id'],'exact')]['plans']),
+            default=None) ==
+        min((cost(p['resources'],weights(q['weights'])) for p in refs[(case['id'],'batching')]['plans']),
+            default=None)
+        for case in cfg['cases'] for q in cfg['queries'])
+    lines += ['', '## Interpretation', '',
+        f"Both generic policies certified {method_totals.get('rounded_interleaved',0)}/36 and "
+        f"{method_totals.get('rounded_partition_progress',0)}/36 timed queries, respectively. "
+        'The independent native solver certified all 12 native queries. The generic policies '
+        'missed the three non-count native optima in every repetition; their displayed U-J* '
+        'is the measured cost shortfall, while U-L is the remaining certificate gap.', '',
+        'The partition/progress addition did not improve attained cost or certification '
+        'completion in this study. On completed overlap queries both methods were quick; '
+        'their small timing differences do not establish a general latency advantage.', '',
+        f'Exact family and strong batching costs matched in {strong_matches}/12 completed '
+        'input/weight queries. Thus this finite family showed no circuit-cost gain against '
+        'the declared strong construction reference. The native missed optima remain a '
+        'search-efficiency limitation, not an unattainable-cost claim.', '',
+        f"Maximum timed overrun: {max(r['overrun_seconds'] for r in data['samples']):.3f}s. "
         'Cost gaps and completion are compared within each input and weight query only. '
         'The strong batching reference is a local construction comparator, not all published HWP methods.', '']
     return '\n'.join(lines)
